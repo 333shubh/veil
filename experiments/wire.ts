@@ -5,7 +5,10 @@ import type { RoundTrace } from '../src/simulation.ts';
 export const BYTES = { id: 4, round: 4, u64: 8, hash: 32, signature: 64, tag: 16, share: 33, sealed: 33 + 16, key: 32 };
 
 export const reportBytes = BYTES.id + BYTES.round + BYTES.u64 + BYTES.tag;
-export const keysBytes = BYTES.id + 4 + 2 * BYTES.key + BYTES.signature;
+export const kemKeyBytes = 1184;
+export const keysBytes = BYTES.id + 4 + 2 * BYTES.key + kemKeyBytes + BYTES.signature;
+/** Setup message from the lower id of a pair: from, to, epoch, ML-KEM ciphertext, signature. */
+export const encapsulationBytes = 3 * 4 + 1088 + BYTES.signature;
 
 /** An announced active or final set as a list of meter ids. */
 export const setBytes = (size: number) => BYTES.round + BYTES.id * size;

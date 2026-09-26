@@ -5,6 +5,9 @@ import { randomBytes } from 'node:crypto';
 import {
   equal,
   hkdf,
+  kemDecapsulate,
+  kemEncapsulate,
+  kemKeygen,
   keystream,
   open,
   prg,
@@ -15,6 +18,7 @@ import {
   verifyBytes,
   x25519,
   x25519Keygen,
+  type KemKeyPair,
   type KeyPair,
   type SigningKey,
 } from './crypto.ts';
@@ -45,7 +49,17 @@ export interface PublicKeys {
   epoch: number;
   mask: Uint8Array; // X25519 key behind every k_ij
   channel: Uint8Array; // X25519 key behind share transport and neighbour confirmations
+  kem: Uint8Array; // ML-KEM-768 key; each pair key also depends on a secret encapsulated to it
   signature: Uint8Array; // device signature, so the relay cannot substitute keys
+}
+
+/** Sent at setup by the lower id of each pair: an ML-KEM secret encapsulated to the other, signed by the sender. */
+export interface Encapsulation {
+  from: MeterId;
+  to: MeterId;
+  epoch: number;
+  ciphertext: Uint8Array;
+  signature: Uint8Array;
 }
 
 export interface Report {
@@ -145,7 +159,8 @@ export const selfMaskCommitment = (epoch: number, round: number, id: MeterId, se
   sha256(label('selfmask'), u32s([epoch, round, id]), secret);
 
 const reportMessage = (epoch: number, round: number, id: MeterId, y: U64) => Buffer.concat([label('report'), u32s([epoch, round, id]), le64(y)]);
-const keysMessage = (k: Omit<PublicKeys, 'signature'>) => Buffer.concat([label('keys'), u32s([k.epoch, k.id]), k.mask, k.channel]);
+const keysMessage = (k: Omit<PublicKeys, 'signature'>) => Buffer.concat([label('keys'), u32s([k.epoch, k.id]), k.mask, k.channel, k.kem]);
+const encapsulationMessage = (e: Omit<Encapsulation, 'signature'>) => Buffer.concat([label('kem'), u32s([e.epoch, e.from, e.to]), e.ciphertext]);
 const confirmMessage = (epoch: number, round: number, activeHash: Uint8Array) => Buffer.concat([label('confirm'), u32s([epoch, round]), activeHash]);
 
 export const anchorMessage = (a: Omit<EpochAnchor, 'signature'>) =>
@@ -201,7 +216,7 @@ function checkAnchor(p: GroupParams, anchor: EpochAnchor, registry: ReadonlyMap<
   }
 }
 
-/** HKDF-SHA256 over an X25519 secret, bound to the epoch and the unordered pair. */
+/** HKDF-SHA256 over the pair's X25519 and ML-KEM secrets, bound to the epoch and the unordered pair. */
 function pairKey(kind: string, shared: Uint8Array, epoch: number, a: MeterId, b: MeterId): Uint8Array {
   return hkdf(shared, Buffer.concat([label(kind), u32s([epoch, Math.min(a, b), Math.max(a, b)])]));
 }
@@ -235,6 +250,9 @@ interface EpochState {
   neighbours: readonly MeterId[];
   maskKeys: KeyPair;
   channelKeys: KeyPair;
+  kemKeys: KemKeyPair;
+  peers: Map<MeterId, PublicKeys>; // neighbours' checked keys, kept until the pair keys are derived
+  kemSecrets: Map<MeterId, Uint8Array>;
   seed: Buffer; // self-mask seed b_i: never leaves the meter
   reportKey: Uint8Array;
   pairs: Map<MeterId, PairKeys>;
@@ -266,32 +284,67 @@ export class Meter {
       neighbours,
       maskKeys: x25519Keygen(),
       channelKeys: x25519Keygen(),
+      kemKeys: kemKeygen(),
+      peers: new Map(),
+      kemSecrets: new Map(),
       seed: randomBytes(32),
       reportKey: reportKey(this.chain, params.epoch),
       pairs: new Map(),
       rounds: new Map(),
     };
-    const keys = { id: this.id, epoch: params.epoch, mask: this.epoch.maskKeys.pk, channel: this.epoch.channelKeys.pk };
+    const keys = { id: this.id, epoch: params.epoch, mask: this.epoch.maskKeys.pk, channel: this.epoch.channelKeys.pk, kem: this.epoch.kemKeys.publicKey };
     return { ...keys, signature: signBytes(this.device, keysMessage(keys)) };
   }
 
-  /** Derive the pair keys with every neighbour, after checking each neighbour's device signature. */
-  keyExchange(directory: ReadonlyMap<MeterId, PublicKeys>): void {
+  /**
+   * Check each neighbour's device-signed keys, and encapsulate an ML-KEM secret to every neighbour with a higher id.
+   * The pair keys are derived in finishKeys, once the lower-id neighbours' encapsulations arrive.
+   */
+  keyExchange(directory: ReadonlyMap<MeterId, PublicKeys>): Encapsulation[] {
     const e = this.current();
     const epoch = e.params.epoch;
+    const out: Encapsulation[] = [];
     for (const j of e.neighbours) {
       const peer = directory.get(j);
       const device = this.registry.get(j);
       if (!peer || !device || peer.epoch !== epoch || !verifyBytes(device, keysMessage(peer), peer.signature)) {
         throw new Error(`no valid keys from neighbour ${j}`);
       }
-      const channel = x25519(e.channelKeys, peer.channel);
+      e.peers.set(j, peer);
+      if (j < this.id) continue;
+      const { ciphertext, secret } = kemEncapsulate(peer.kem);
+      e.kemSecrets.set(j, secret);
+      const body = { from: this.id, to: j, epoch, ciphertext };
+      out.push({ ...body, signature: signBytes(this.device, encapsulationMessage(body)) });
+    }
+    return out;
+  }
+
+  /** Take the lower-id neighbours' signed encapsulations, then derive every pair key from X25519 and ML-KEM together. */
+  finishKeys(inbox: readonly Encapsulation[]): void {
+    const e = this.current();
+    const epoch = e.params.epoch;
+    for (const m of inbox) {
+      const device = this.registry.get(m.from);
+      if (m.to !== this.id || m.epoch !== epoch || m.from > this.id || !e.peers.has(m.from) || !device || !verifyBytes(device, encapsulationMessage(m), m.signature)) {
+        throw new Error(`invalid encapsulation from ${m.from}`);
+      }
+      e.kemSecrets.set(m.from, kemDecapsulate(m.ciphertext, e.kemKeys.secretKey));
+    }
+    for (const j of e.neighbours) {
+      const peer = e.peers.get(j);
+      const kem = e.kemSecrets.get(j);
+      if (!peer || !kem) throw new Error(`no key material with neighbour ${j}`);
+      const channel = Buffer.concat([x25519(e.channelKeys, peer.channel), kem]);
       e.pairs.set(j, {
-        mask: pairKey('mask', x25519(e.maskKeys, peer.mask), epoch, this.id, j),
+        mask: pairKey('mask', Buffer.concat([x25519(e.maskKeys, peer.mask), kem]), epoch, this.id, j),
         share: pairKey('share', channel, epoch, this.id, j),
         confirm: pairKey('confirm', channel, epoch, this.id, j),
       });
     }
+    for (const b of e.kemSecrets.values()) b.fill(0);
+    e.kemSecrets.clear();
+    e.peers.clear();
   }
 
   /** y_i(t) = x_i(t) + PRG(b_i, t) + sum_{j in N(i)} s_ij PRG(k_ij, t)  (mod 2^64), s_ij = +1 iff id_i < id_j. */
@@ -429,7 +482,7 @@ export class Meter {
   private erase(): void {
     const e = this.epoch;
     if (!e) return;
-    for (const b of [e.seed, e.maskKeys.sk, e.channelKeys.sk, e.reportKey]) b.fill(0);
+    for (const b of [e.seed, e.maskKeys.sk, e.channelKeys.sk, e.kemKeys.secretKey, e.reportKey, ...e.kemSecrets.values()]) b.fill(0);
     for (const p of e.pairs.values()) for (const b of [p.mask, p.share, p.confirm]) b.fill(0);
     this.epoch = undefined;
   }
@@ -486,6 +539,13 @@ export class Coordinator {
       this.directory.set(k.id, k);
     }
     return this.directory;
+  }
+
+  /** Relay setup encapsulations to their recipients. */
+  relay(encapsulations: readonly Encapsulation[]): Map<MeterId, Encapsulation[]> {
+    const inbox = new Map<MeterId, Encapsulation[]>();
+    for (const m of encapsulations) push(inbox, m.to, m);
+    return inbox;
   }
 
   /** At the deadline: U is every meter with an authentic report for this round; other rounds' reports are dropped. */

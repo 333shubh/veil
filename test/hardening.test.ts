@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { x25519Keygen } from '../src/crypto.ts';
+import { kemEncapsulate, x25519Keygen } from '../src/crypto.ts';
 import { signAnchor } from '../src/ledger.ts';
 import { anchoredParams, type MeterId, type PublicKeys } from '../src/protocol.ts';
 import { distinctIds, Rng, setupGroup, startEpoch } from './support.ts';
@@ -41,6 +41,22 @@ describe('device-signed epoch keys', () => {
     directory.set(victim, { ...directory.get(victim)!, mask: x25519Keygen().pk } satisfies PublicKeys);
     const neighbour = g.params.graph.get(victim)![0]!;
     expect(() => g.meters.get(neighbour)!.keyExchange(directory)).toThrow(`no valid keys from neighbour ${victim}`);
+  });
+});
+
+describe('ML-KEM encapsulations', () => {
+  it('stop a relay that swaps in a secret it encapsulated itself', () => {
+    const { ids, g } = fresh(46);
+    g.anchor = signAnchor(g.operator, { epoch: 2, roster: ids, beacon: randomBytes(32), k: 4 });
+    g.ledger.anchor(g.anchor);
+    g.params = anchoredParams(g.anchor, g.registry, 3, 3);
+    g.coordinator.startEpoch(g.params, g.anchor);
+    const keys = [...g.meters.values()].map((m) => m.startEpoch(g.params, g.anchor));
+    const directory = g.coordinator.register(keys);
+    const inbox = g.coordinator.relay([...g.meters.values()].flatMap((m) => m.keyExchange(directory)));
+    const [victim, messages] = [...inbox].find(([, list]) => list.length > 0)!;
+    const forged = messages.map((m, i) => (i === 0 ? { ...m, ciphertext: kemEncapsulate(directory.get(victim)!.kem).ciphertext } : m));
+    expect(() => g.meters.get(victim)!.finishKeys(forged)).toThrow(`invalid encapsulation from ${messages[0]!.from}`);
   });
 });
 

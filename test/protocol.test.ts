@@ -95,5 +95,5 @@ describe('Veil round', () => {
       const total = [...reporting].reduce((acc, id) => acc + readings.get(id)!, 0n);
       expect(runRound(group, round, readings, { reporting, confirming: reporting, releasing: reporting }).result).toMatchObject({ status: 'published', total });
     }
-  });
+  }, 30_000);
 });

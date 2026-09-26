@@ -48,7 +48,7 @@ export function setupGroup(ids: MeterId[], epoch: number, k: number, threshold: 
   return g;
 }
 
-/** Epoch setup: anchor roster and beacon on the ledger, derive the graph, exchange device-signed keys. */
+/** Epoch setup: anchor roster and beacon on the ledger, derive the graph, exchange device-signed keys and ML-KEM secrets. */
 export function startEpoch(g: Group, epoch: number, k: number, threshold: number, minGroupSize = 3): void {
   g.anchor = signAnchor(g.operator, { epoch, roster: g.ids, beacon: randomBytes(32), k });
   g.ledger.anchor(g.anchor);
@@ -56,7 +56,8 @@ export function startEpoch(g: Group, epoch: number, k: number, threshold: number
   g.coordinator.startEpoch(g.params, g.anchor);
   g.keys = [...g.meters.values()].map((m) => m.startEpoch(g.params, g.anchor));
   const directory = g.coordinator.register(g.keys);
-  for (const m of g.meters.values()) m.keyExchange(directory);
+  const inbox = g.coordinator.relay([...g.meters.values()].flatMap((m) => m.keyExchange(directory)));
+  for (const m of g.meters.values()) m.finishKeys(inbox.get(m.id) ?? []);
 }
 
 /** Who answers each phase of a round: reporting ⊇ confirming ⊇ releasing. */
