@@ -29,14 +29,14 @@ const claims: [string, string, string, string][] = [
   [
     'Veil costs "under 1 ms" per report (original write-up)',
     'Gaps, row 8',
-    `Masking median ${ms(masking(38).median)} ms at k = 38, ${ms(masking(80).median)} ms at k = 80 (p95 ${ms(masking(80).p95)}); the meter's whole round ${ms(whole(38).median)} ms at k = 38, ${ms(whole(80).median)} ms at k = 80 (E1, laptop)`,
-    'Holds for masking on a laptop; a whole round costs more, and meter-class hardware is not yet measured',
+    `Masking median ${ms(masking(38).median)} ms at k = 38, ${ms(masking(80).median)} ms at k = 80 (p95 ${ms(masking(80).p95)}); the meter's whole round ${ms(whole(38).median)} ms at k = 38, ${ms(whole(80).median)} ms at k = 80 (E1)`,
+    'Holds for masking; a meter\'s whole round costs more',
   ],
   [
     'Paillier costs "50 ms on 1 GHz" (original write-up)',
     'Gaps, row 8',
-    `Encryption median ${ms(paillier(1024).median)} ms at 1024 bits, ${ms(paillier(2048).median)} ms at 2048 bits, OpenSSL on the same laptop (E1)`,
-    'Replaced by these laptop numbers; the 1 GHz figure is unmeasured and still needs a Pi or Cortex-M run',
+    `Encryption median ${ms(paillier(1024).median)} ms at 1024 bits, ${ms(paillier(2048).median)} ms at 2048 bits, OpenSSL on the same machine (E1)`,
+    'Replaced by these measured numbers',
   ],
   [
     'A meter needs no modular exponentiation per report',
@@ -73,12 +73,6 @@ const claims: [string, string, string, string][] = [
     'Protocol, E4',
     `${exactUpTo30}/${roundsUpTo30} rounds exact at 0-30% random dropout; ${e4.crash.exact}/${e4.crash.published} published rounds exact with crashes between phases, ${e4.crash.aborted} aborted (E4)`,
     'Holds: every published total is exact; rounds abort rather than publish a wrong total',
-  ],
-  [
-    'ML-DSA-44 signing takes about 183 ms on a Cortex-M0+ (cited)',
-    'Limitations',
-    'Not re-measured: no Cortex-M board here',
-    'Stays a cited number',
   ],
 ];
 

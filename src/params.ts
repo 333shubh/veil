@@ -10,7 +10,10 @@ export interface Design {
   roundsPerEpoch: number;
 }
 
-/** Spec bound of 2^-40 on privacy; one-day epochs of 5-second rounds. Rates and the recovery bound are chosen here. */
+/**
+ * Spec bound of 2^-40 on privacy; one-day epochs of 5-second rounds. Dropout 10% sits above published RF-mesh smart-meter
+ * delivery ratios (over 99% at 100 nodes, over 92% at 500-5,000), so it covers the worst reported network with margin.
+ */
 export const DESIGN: Design = { corrupt: 0.2, dropout: 0.1, privacyLog2: -40, recoveryLog2: -20, roundsPerEpoch: 17_280 };
 
 /** log2 of union bounds over the group. */
