@@ -1,5 +1,5 @@
 // Test harness: seeded randomness for readings, graphs and dropout patterns, and a round driver.
-import { Coordinator, Meter, type GroupParams, type MeterId, type Release, type RoundResult } from '../src/protocol';
+import { Coordinator, Meter, type GroupParams, type MeterId, type Release, type RoundResult } from '../src/protocol.ts';
 
 /** mulberry32: reproducible test randomness (protocol secrets still come from node:crypto). */
 export class Rng {

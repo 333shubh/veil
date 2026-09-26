@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { combine, P, split } from '../src/shamir';
-import { Rng } from './support';
+import { combine, P, split } from '../src/shamir.ts';
+import { Rng } from './support.ts';
 
 function powMod(b: bigint, e: bigint, m: bigint): bigint {
   let r = 1n;
