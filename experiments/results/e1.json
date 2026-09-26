@@ -1,0 +1,157 @@
+{
+  "environment": "13th Gen Intel(R) Core(TM) i5-13450HX (16 threads, pinned to logical CPU 0 (a performance core)), win32 10.0.26200, Node v22.10.0, OpenSSL 3.0.15+quic",
+  "seconds": 646,
+  "rows": [
+    {
+      "scheme": "Veil masking (report)",
+      "k": 8,
+      "runs": 10000,
+      "stats": {
+        "n": 10000,
+        "median": 0.07519999999931315,
+        "p95": 0.11999999999534339,
+        "mean": 0.09336171999997323,
+        "max": 26.46939999999995
+      },
+      "bytes": 32
+    },
+    {
+      "scheme": "Veil masking (report)",
+      "k": 16,
+      "runs": 10000,
+      "stats": {
+        "n": 10000,
+        "median": 0.07099999999627471,
+        "p95": 0.11299999999755528,
+        "mean": 0.0947316400000047,
+        "max": 31.44310000000405
+      },
+      "bytes": 32
+    },
+    {
+      "scheme": "Veil masking (report)",
+      "k": 38,
+      "runs": 10000,
+      "stats": {
+        "n": 10000,
+        "median": 0.14809999999852153,
+        "p95": 0.23990000000048894,
+        "mean": 0.19261273999994838,
+        "max": 16.51520000000164
+      },
+      "bytes": 32
+    },
+    {
+      "scheme": "Veil masking (report)",
+      "k": 68,
+      "runs": 10000,
+      "stats": {
+        "n": 10000,
+        "median": 0.25359999999636784,
+        "p95": 0.3820999999988999,
+        "mean": 0.3296414600000085,
+        "max": 19.0338999999949
+      },
+      "bytes": 32
+    },
+    {
+      "scheme": "Veil masking (report)",
+      "k": 80,
+      "runs": 10000,
+      "stats": {
+        "n": 10000,
+        "median": 0.2955000000001746,
+        "p95": 0.43640000000596046,
+        "mean": 0.3881310700000539,
+        "max": 23.519100000004983
+      },
+      "bytes": 32
+    },
+    {
+      "scheme": "Paillier encryption",
+      "bits": 1024,
+      "runs": 10000,
+      "stats": {
+        "n": 10000,
+        "median": 1.337599999998929,
+        "p95": 1.5769000000000233,
+        "mean": 1.38984966999999,
+        "max": 29.59860000000117
+      },
+      "bytes": 280
+    },
+    {
+      "scheme": "Paillier encryption",
+      "bits": 2048,
+      "runs": 10000,
+      "stats": {
+        "n": 10000,
+        "median": 9.739400000005844,
+        "p95": 12.377900000006775,
+        "mean": 10.232645540000055,
+        "max": 78.03650000000198
+      },
+      "bytes": 536
+    },
+    {
+      "scheme": "Veil whole round (report, confirm, release)",
+      "k": 8,
+      "runs": 500,
+      "stats": {
+        "n": 500,
+        "median": 0.3809999999648426,
+        "p95": 0.6158000000286847,
+        "mean": 0.4907613999997848,
+        "max": 11.149499999999534
+      }
+    },
+    {
+      "scheme": "Veil whole round (report, confirm, release)",
+      "k": 16,
+      "runs": 500,
+      "stats": {
+        "n": 500,
+        "median": 0.680900000006659,
+        "p95": 0.9178999999712687,
+        "mean": 0.8041127999996533,
+        "max": 5.8527999999932945
+      }
+    },
+    {
+      "scheme": "Veil whole round (report, confirm, release)",
+      "k": 38,
+      "runs": 500,
+      "stats": {
+        "n": 500,
+        "median": 1.703399999969406,
+        "p95": 1.9336000000184868,
+        "mean": 1.820727800000226,
+        "max": 6.9593999999633525
+      }
+    },
+    {
+      "scheme": "Veil whole round (report, confirm, release)",
+      "k": 68,
+      "runs": 500,
+      "stats": {
+        "n": 500,
+        "median": 3.448599999974249,
+        "p95": 6.910199999983888,
+        "mean": 3.721311200002092,
+        "max": 10.105100000015227
+      }
+    },
+    {
+      "scheme": "Veil whole round (report, confirm, release)",
+      "k": 80,
+      "runs": 500,
+      "stats": {
+        "n": 500,
+        "median": 4.359699999971781,
+        "p95": 8.938700000056997,
+        "mean": 4.798093999995967,
+        "max": 27.5964999999851
+      }
+    }
+  ]
+}

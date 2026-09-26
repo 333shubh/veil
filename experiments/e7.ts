@@ -64,7 +64,7 @@ function monteCarlo(row: number, n: number, k: number, corrupt: number, dropout:
   const breach: number[] = [];
   const stranded: number[] = [];
   let groupBreach = 0;
-  let aborts = 0;
+  let leftOut = 0;
   let partitions = 0;
 
   for (let trial = 0; trial < TRIALS; trial++) {
@@ -78,14 +78,14 @@ function monteCarlo(row: number, n: number, k: number, corrupt: number, dropout:
     const live = new Set(ids.filter(() => uniform() >= dropout));
     let breached = 0;
     let strandedCount = 0;
-    let aborted = false;
+    let someoneLeftOut = false;
     for (const i of ids) {
       const ns = graph.get(i)!;
       if (!bad.has(i) && ns.filter((j) => bad.has(j)).length >= t) breached++;
       const liveNs = ns.filter((j) => live.has(j)).length;
       if (liveNs < t) {
         strandedCount++;
-        if (live.has(i) || liveNs > 0) aborted = true; // its seed or key is needed and cannot be rebuilt
+        if (live.has(i) || liveNs > 0) someoneLeftOut = true; // it is needed but cannot deal to t live neighbours
       }
     }
     const honest = ids.filter((i) => live.has(i) && !bad.has(i));
@@ -105,14 +105,14 @@ function monteCarlo(row: number, n: number, k: number, corrupt: number, dropout:
     breach.push(breached / (n - c));
     stranded.push(strandedCount / n);
     if (breached > 0) groupBreach++;
-    if (aborted) aborts++;
+    if (someoneLeftOut) leftOut++;
   }
 
   const exact = perMeter(n, k, t, { ...DESIGN, corrupt, dropout });
   const pairs = (n * (n - 1)) / 2;
   const bound = {
     groupBreach: (n - c) * exact.breach,
-    abort: n * exact.stranded,
+    leftOut: n * exact.stranded,
     partition: k >= n - 1 ? 0 : pairs * exact.runsBad,
   };
   const b = stat(breach, n - c);
@@ -121,7 +121,7 @@ function monteCarlo(row: number, n: number, k: number, corrupt: number, dropout:
     agrees(b, exact.breach),
     agrees(s, exact.stranded),
     within(groupBreach, bound.groupBreach),
-    within(aborts, bound.abort),
+    within(leftOut, bound.leftOut),
     within(partitions, bound.partition),
   ];
   const ok = checks.every((x) => x !== false);
@@ -131,7 +131,7 @@ function monteCarlo(row: number, n: number, k: number, corrupt: number, dropout:
     `| ${sci(b.mean)} ± ${sci(Z * b.se)} | ${sci(exact.breach)}${mark(checks[0])} ` +
     `| ${sci(s.mean)} ± ${sci(Z * s.se)} | ${sci(exact.stranded)}${mark(checks[1])} ` +
     `| ${sci(groupBreach / TRIALS)} | ${sci(bound.groupBreach)} ` +
-    `| ${sci(aborts / TRIALS)} | ${sci(bound.abort)} ` +
+    `| ${sci(leftOut / TRIALS)} | ${sci(bound.leftOut)} ` +
     `| ${sci(partitions / TRIALS)} | ${sci(bound.partition)} |`;
   return { ok, line, counted: checks.slice(0, 2).filter((x) => x !== undefined).length };
 }
@@ -162,7 +162,7 @@ out.push(
   '',
 );
 out.push(
-  '| N | k | t | corrupt | dropout | breach per meter (MC) | exact | stranded per meter (MC) | exact | group breach (MC) | union bound | aborted round (MC) | union bound | partitioned round (MC) | bound |',
+  '| N | k | t | corrupt | dropout | breach per meter (MC) | exact | stranded per meter (MC) | exact | group breach (MC) | union bound | round leaving a meter out (MC) | union bound | partitioned round (MC) | bound |',
   '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|',
 );
 let mcRows = 0;
@@ -185,9 +185,9 @@ console.log(`[e7] monte carlo: ${mcRows} rows x ${TRIALS} trials, ${mcCounted} p
 // 2. The gate: k for each group size at the design point.
 const design = (d: Design) =>
   `corrupt ${rate(d.corrupt)}, dropout ${d.dropout}, privacy failure <= 2^${d.privacyLog2} per group per epoch ` +
-  `(${d.roundsPerEpoch} rounds), aborted round <= 2^${d.recoveryLog2} per group per round, t > k/2`;
+  `(${d.roundsPerEpoch} rounds), a meter left out of a round's total <= 2^${d.recoveryLog2} per group per round, t > k/2`;
 out.push('', '## 2. Chosen k per group size (gate)', '', `Design point: ${design(DESIGN)}.`, '');
-out.push('| N | k | t | t range | log2 privacy failure | log2 partition | log2 aborted round | meets bounds |', '|---|---|---|---|---|---|---|---|');
+out.push('| N | k | t | t range | log2 privacy failure | log2 partition | log2 meter left out | meets bounds |', '|---|---|---|---|---|---|---|---|');
 const chosen = new Map<number, number>();
 const missing: string[] = [];
 for (const n of GROUP_SIZES) {
@@ -195,15 +195,15 @@ for (const n of GROUP_SIZES) {
   if (c) {
     chosen.set(n, c.k);
     out.push(`| ${n} | ${c.k}${c.k === n - 1 ? ' (complete)' : ''} | ${c.t} | ${c.tRange.join('-')} | ${bits(c.privacy)} | ${bits(c.partition)} | ${bits(c.recovery)} | yes |`);
-    console.log(`[e7] N=${n}: k=${c.k} t=${c.t} privacy 2^${bits(c.privacy)} abort 2^${bits(c.recovery)}`);
+    console.log(`[e7] N=${n}: k=${c.k} t=${c.t} privacy 2^${bits(c.privacy)} left out 2^${bits(c.recovery)}`);
   } else if (n - 1 > MAX_K) {
     throw new Error(`no k up to ${MAX_K} for N=${n}`);
   } else {
     const t = Math.floor((n - 1) / 2) + 1;
     const f = evaluate(n, n - 1, t, DESIGN);
-    missing.push(`N=${n} (complete graph, t=${t}: aborted round 2^${bits(f.recovery)})`);
-    out.push(`| ${n} | none | | | ${bits(f.privacy)} at k=${n - 1}, t=${t} | | ${bits(f.recovery)} at k=${n - 1}, t=${t} | no: aborts |`);
-    console.log(`[e7] N=${n}: no k; complete graph t=${t} gives privacy 2^${bits(f.privacy)} abort 2^${bits(f.recovery)}`);
+    missing.push(`N=${n} (complete graph, t=${t}: meter left out 2^${bits(f.recovery)})`);
+    out.push(`| ${n} | none | | | ${bits(f.privacy)} at k=${n - 1}, t=${t} | | ${bits(f.recovery)} at k=${n - 1}, t=${t} | no: meters left out |`);
+    console.log(`[e7] N=${n}: no k; complete graph t=${t} gives privacy 2^${bits(f.privacy)} left out 2^${bits(f.recovery)}`);
   }
 }
 
@@ -211,8 +211,8 @@ for (const n of GROUP_SIZES) {
 const maxK = Math.max(...chosen.values()) + 8;
 out.push('', '## 3. Privacy failure against k', '');
 out.push(
-  'log2 of the privacy union bound at the design point, with t set as high as the aborted-round bound allows. ' +
-    '"abort" means no t > k/2 meets that bound. **Bold** is the chosen k: the first at or below the 2^-40 line.',
+  'log2 of the privacy union bound at the design point, with t set as high as the left-out bound allows. ' +
+    '"out" means no t > k/2 meets that bound. **Bold** is the chosen k: the first at or below the 2^-40 line.',
   '',
 );
 out.push(`| k | ${GROUP_SIZES.map((n) => `N=${n}`).join(' | ')} |`, `|---|${GROUP_SIZES.map(() => '---|').join('')}`);
@@ -220,7 +220,7 @@ for (let k = 4; k <= maxK; k += 2) {
   const cells = GROUP_SIZES.map((n) => {
     if (k >= n - 1) return '';
     const t = strongestThreshold(n, k, DESIGN);
-    if (t === undefined) return 'abort';
+    if (t === undefined) return 'out';
     const l = bits(evaluate(n, k, t, DESIGN).privacy);
     return chosen.get(n) === k ? `**${l}**` : l;
   });
@@ -230,14 +230,14 @@ out.push(
   `| complete | ${GROUP_SIZES.map((n) => {
     if (n - 1 > maxK) return '';
     const t = strongestThreshold(n, n - 1, DESIGN);
-    if (t === undefined) return 'abort';
+    if (t === undefined) return 'out';
     const l = bits(evaluate(n, n - 1, t, DESIGN).privacy);
     return chosen.get(n) === n - 1 ? `**${l}**` : l;
   }).join(' | ')} |`,
 );
 
 // 4. Sensitivity to the corruption and dropout rates.
-out.push('', '## 4. Chosen k/t for other rates', '', 'Same bounds; "none" means even the complete graph aborts too often.', '');
+out.push('', '## 4. Chosen k/t for other rates', '', 'Same bounds; "none" means even the complete graph leaves meters out too often.', '');
 out.push(`| corrupt | dropout | ${GROUP_SIZES.map((n) => `N=${n}`).join(' | ')} |`, `|---|---|${GROUP_SIZES.map(() => '---|').join('')}`);
 for (const corrupt of SWEEP_CORRUPT) {
   for (const dropout of SWEEP_DROPOUT) {
