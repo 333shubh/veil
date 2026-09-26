@@ -1,5 +1,19 @@
-// Test harness: seeded randomness for readings, graphs and dropout patterns, and a round driver.
-import { Coordinator, Meter, type GroupParams, type MeterId, type Release, type RoundResult } from '../src/protocol.ts';
+// Test harness: seeded randomness for readings and dropout patterns, and a driver for epochs and rounds.
+import { randomBytes } from 'node:crypto';
+import { ed25519Keygen, type SigningKey } from '../src/crypto.ts';
+import { Ledger, signAnchor } from '../src/ledger.ts';
+import {
+  anchoredParams,
+  Coordinator,
+  isAborted,
+  Meter,
+  type Confirm,
+  type EpochAnchor,
+  type GroupParams,
+  type MeterId,
+  type Release,
+  type RoundResult,
+} from '../src/protocol.ts';
 
 /** mulberry32: reproducible test randomness (protocol secrets still come from node:crypto). */
 export class Rng {
@@ -47,47 +61,79 @@ export function distinctIds(rng: Rng, n: number): MeterId[] {
   return [...ids];
 }
 
-/** Random symmetric graph in which every meter has at least k neighbours. */
-export function randomGraph(rng: Rng, ids: readonly MeterId[], k: number): Map<MeterId, MeterId[]> {
-  const adj = new Map(ids.map((id) => [id, new Set<MeterId>()]));
-  for (const i of ids) {
-    while (adj.get(i)!.size < k) {
-      const j = rng.pick(ids);
-      if (j === i) continue;
-      adj.get(i)!.add(j);
-      adj.get(j)!.add(i);
-    }
-  }
-  return new Map([...adj].map(([id, ns]) => [id, [...ns]]));
-}
-
 export interface Group {
-  params: GroupParams;
+  ids: MeterId[];
+  registry: Map<MeterId, Uint8Array>;
+  operator: SigningKey;
+  ledger: Ledger;
   meters: Map<MeterId, Meter>;
   coordinator: Coordinator;
+  params: GroupParams;
+  anchor: EpochAnchor;
 }
 
-/** Epoch setup: publish keys, derive k_ij, deal encrypted shares through the coordinator. */
-export function setupGroup(params: GroupParams): Group {
-  const meters = new Map([...params.graph.keys()].map((id) => [id, new Meter(id, params)]));
-  const coordinator = new Coordinator(params);
-  const directory = coordinator.register([...meters.values()].map((m) => m.publicKeys()));
-  const inbox = coordinator.route([...meters.values()].flatMap((m) => m.deal(directory)));
-  for (const m of meters.values()) m.accept(inbox.get(m.id) ?? []);
-  return { params, meters, coordinator };
+/** Devices, meters, coordinator and ledger for a roster, then its first epoch. */
+export function setupGroup(ids: MeterId[], epoch: number, k: number, threshold: number, minGroupSize = 3): Group {
+  const devices = new Map(ids.map((id) => [id, ed25519Keygen()]));
+  const registry = new Map(ids.map((id) => [id, devices.get(id)!.publicKey]));
+  const secrets = new Map(ids.map((id) => [id, randomBytes(32)]));
+  const operator = ed25519Keygen();
+  const g = {
+    ids,
+    registry,
+    operator,
+    ledger: new Ledger(operator.publicKey, registry),
+    meters: new Map(ids.map((id) => [id, new Meter(id, devices.get(id)!, secrets.get(id)!, registry)])),
+    coordinator: new Coordinator(secrets, registry),
+  } as Group;
+  startEpoch(g, epoch, k, threshold, minGroupSize);
+  return g;
 }
 
-/** One round: `reporting` meters report by the deadline; `responding` ones (a subset) answer the share request. */
+/** Epoch setup: anchor roster and beacon on the ledger, derive the graph, exchange device-signed keys. */
+export function startEpoch(g: Group, epoch: number, k: number, threshold: number, minGroupSize = 3): void {
+  g.anchor = signAnchor(g.operator, { epoch, roster: g.ids, beacon: randomBytes(32), k });
+  g.ledger.anchor(g.anchor);
+  g.params = anchoredParams(g.anchor, g.registry, threshold, minGroupSize);
+  g.coordinator.startEpoch(g.params, g.anchor);
+  const directory = g.coordinator.register([...g.meters.values()].map((m) => m.startEpoch(g.params, g.anchor)));
+  for (const m of g.meters.values()) m.keyExchange(directory);
+}
+
+/** Who answers each phase of a round: reporting ⊇ confirming ⊇ releasing. */
+export interface Pattern {
+  reporting: ReadonlySet<MeterId>;
+  confirming: ReadonlySet<MeterId>;
+  releasing: ReadonlySet<MeterId>;
+}
+
+export const everyone = (ids: MeterId[]): Pattern => ({ reporting: new Set(ids), confirming: new Set(ids), releasing: new Set(ids) });
+
 export function runRound(
   g: Group,
   round: number,
   readings: ReadonlyMap<MeterId, bigint>,
-  reporting: ReadonlySet<MeterId>,
-  responding: ReadonlySet<MeterId>,
-): { result: RoundResult; releases: Release[] } {
-  const reports = [...reporting].map((id) => g.meters.get(id)!.report(round, readings.get(id)!));
+  pattern: Pattern,
+): { result: RoundResult; aborts: string[] } {
+  const aborts: string[] = [];
+  const reports = [...pattern.reporting].map((id) => g.meters.get(id)!.report(round, readings.get(id)!));
   const closed = g.coordinator.close(round, reports);
-  if (closed.status === 'suppressed') return { result: closed, releases: [] };
-  const releases = [...responding].map((id) => g.meters.get(id)!.release(round, closed.active));
-  return { result: g.coordinator.recover(releases), releases };
+  if (closed.status === 'suppressed') return { result: closed, aborts };
+  const confirms: Confirm[] = [];
+  for (const id of closed.active) {
+    if (!pattern.confirming.has(id)) continue;
+    const c = g.meters.get(id)!.confirm(round, closed.active);
+    if (isAborted(c)) aborts.push(c.aborted);
+    else confirms.push(c);
+  }
+  const collected = g.coordinator.collect(confirms);
+  if (collected.status === 'suppressed') return { result: collected, aborts };
+  const releases: Release[] = [];
+  for (const id of collected.final) {
+    if (!pattern.releasing.has(id)) continue;
+    const r = g.meters.get(id)!.release(round, collected.final, collected.inbox.get(id) ?? []);
+    if (isAborted(r)) aborts.push(r.aborted);
+    else releases.push(r);
+  }
+  return { result: g.coordinator.recover(releases), aborts };
 }

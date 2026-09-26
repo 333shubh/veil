@@ -8,7 +8,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "vitest run",
+    "test": "vitest run --exclude test/exactness.test.ts",
+    "test:exactness": "vitest run test/exactness.test.ts",
     "typecheck": "tsc --noEmit",
     "e7": "node --experimental-strip-types --disable-warning=ExperimentalWarning experiments/e7.ts"
   },
