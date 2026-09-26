@@ -53,6 +53,20 @@ describe('Veil round', () => {
     expect(runRound(group, 1, readings, pattern).result.status).toBe('aborted');
   });
 
+  it('leaves out a meter with fewer than t live neighbours, which still passes on the shares it holds', () => {
+    const { ids, group, readings } = fixture(19, 16, 6, 4);
+    const target = ids[0]!;
+    const gone = group.params.graph.get(target)!.slice(0, 3); // 3 of 6 left: below t
+    const rest = without(ids, ...gone);
+    const trace = runRound(group, 1, readings, { reporting: rest, confirming: rest, releasing: rest });
+    expect(trace.result.status).toBe('published');
+    if (trace.result.status !== 'published') return;
+    const final = trace.result.evidence.final;
+    expect(final).not.toContain(target);
+    expect(trace.releases.some((r) => r.id === target && r.shares.size > 0)).toBe(true);
+    expect(trace.result.total).toBe(final.reduce((acc, id) => acc + readings.get(id)!, 0n));
+  });
+
   it('suppresses totals below the minimum group size', () => {
     const { ids, group, readings } = fixture(16, 6, 2, 2);
     const two = new Set(ids.slice(0, 2));
