@@ -1,8 +1,8 @@
 // Veil reference core: double-masked secure sum over a neighbour graph, with Shamir-based dropout recovery.
 import { randomBytes } from 'node:crypto';
-import { hkdf, open, prg, seal, x25519, x25519KeyPair, x25519Keygen, type KeyPair } from './crypto';
-import { add, decode, encode, sub, type U64 } from './ring';
-import { combine, SHARE_BYTES, split, toBigInt, toBytes, type Share } from './shamir';
+import { hkdf, open, prg, seal, x25519, x25519KeyPair, x25519Keygen, type KeyPair } from './crypto.ts';
+import { add, decode, encode, sub, type U64 } from './ring.ts';
+import { combine, SHARE_BYTES, split, toBigInt, toBytes, type Share } from './shamir.ts';
 
 export type MeterId = number; // nonzero u32; doubles as the meter's Shamir evaluation point
 
@@ -81,7 +81,9 @@ function checkParams(p: GroupParams, id: MeterId, neighbours: readonly MeterId[]
 }
 
 export class Meter {
+  readonly id: MeterId;
   readonly neighbours: readonly MeterId[];
+  private readonly params: GroupParams;
   private readonly maskKeys = x25519Keygen(); // ephemeral for the epoch
   private readonly channelKeys = x25519Keygen();
   private readonly seed = randomBytes(32); // self-mask seed b_i
@@ -90,10 +92,9 @@ export class Meter {
   private readonly held = new Map<MeterId, { selfMask: bigint; maskKey: bigint }>();
   private readonly released = new Set<number>();
 
-  constructor(
-    readonly id: MeterId,
-    private readonly params: GroupParams,
-  ) {
+  constructor(id: MeterId, params: GroupParams) {
+    this.id = id;
+    this.params = params;
     this.neighbours = checkParams(params, id, params.graph.get(id));
   }
 
@@ -158,10 +159,12 @@ export class Meter {
 
 /** Untrusted relay and aggregator. Holds public keys, relays ciphertexts, and sums. */
 export class Coordinator {
+  private readonly params: GroupParams;
   private readonly directory = new Map<MeterId, PublicKeys>();
   private pending?: { round: number; reports: Map<MeterId, U64> };
 
-  constructor(private readonly params: GroupParams) {
+  constructor(params: GroupParams) {
+    this.params = params;
     for (const [i, ns] of params.graph) {
       checkParams(params, i, ns);
       for (const j of ns) if (!params.graph.get(j)?.includes(i)) throw new RangeError(`graph is not symmetric at ${i}-${j}`);

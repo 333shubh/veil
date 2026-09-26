@@ -9,7 +9,7 @@ import {
   hkdfSync,
   type KeyObject,
 } from 'node:crypto';
-import type { U64 } from './ring';
+import type { U64 } from './ring.ts';
 
 export interface KeyPair {
   sk: Uint8Array; // raw 32-byte X25519 private key (what gets Shamir-shared)
@@ -54,6 +54,23 @@ export function prg(key: Uint8Array, epoch: number, round: number): U64 {
   iv.writeUInt32LE(epoch, 4);
   iv.writeBigUInt64LE(BigInt(round), 8);
   return createCipheriv('chacha20', key, iv).update(ZERO8).readBigUInt64LE(0);
+}
+
+/** Endless ChaCha20 keystream (zero nonce) read as u32s: deterministic randomness from a public seed. */
+export function u32Stream(key: Uint8Array): () => number {
+  const cipher = createCipheriv('chacha20', key, Buffer.alloc(16));
+  const zeros = Buffer.alloc(4096);
+  let block = Buffer.alloc(0);
+  let at = 0;
+  return () => {
+    if (at === block.length) {
+      block = cipher.update(zeros);
+      at = 0;
+    }
+    const v = block.readUInt32LE(at);
+    at += 4;
+    return v;
+  };
 }
 
 const TAG = 16;

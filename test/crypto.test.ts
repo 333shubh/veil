@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hkdf, open, prg, seal, x25519, x25519KeyPair, x25519Keygen } from '../src/crypto';
+import { hkdf, open, prg, seal, x25519, x25519KeyPair, x25519Keygen } from '../src/crypto.ts';
 
 const hex = (s: string) => Buffer.from(s, 'hex');
 const toHex = (b: Uint8Array) => Buffer.from(b).toString('hex');
