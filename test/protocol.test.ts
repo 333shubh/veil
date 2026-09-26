@@ -1,6 +1,9 @@
+import { randomBytes } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import type { GroupParams, MeterId } from '../src/protocol';
-import { distinctIds, randomGraph, Rng, runRound, setupGroup } from './support';
+import { harary } from '../src/graph.ts';
+import { choose, DESIGN } from '../src/params.ts';
+import type { GroupParams, MeterId } from '../src/protocol.ts';
+import { distinctIds, randomGraph, Rng, runRound, setupGroup } from './support.ts';
 
 function fixture(seed: number, n: number, k: number, t: number) {
   const rng = new Rng(seed);
@@ -47,5 +50,18 @@ describe('Veil round', () => {
     const meter = group.meters.get(ids[0]!)!;
     meter.release(3, new Set(ids));
     expect(() => meter.release(3, new Set(ids.slice(1)))).toThrow(/already released/);
+  });
+
+  it('stays exact on a generated graph with the chosen k and t', () => {
+    const rng = new Rng(16);
+    const ids = distinctIds(rng, 100);
+    const { k, t } = choose(100, DESIGN)!;
+    const group = setupGroup({ epoch: 9, threshold: t, minGroupSize: 3, graph: harary(ids, k, randomBytes(32)) });
+    for (let round = 0; round < 5; round++) {
+      const readings = new Map<MeterId, bigint>(ids.map((id) => [id, BigInt(rng.int(-5_000, 20_000))]));
+      const reporting = new Set(ids.filter(() => !rng.chance(DESIGN.dropout)));
+      const total = [...reporting].reduce((acc, id) => acc + readings.get(id)!, 0n);
+      expect(runRound(group, round, readings, reporting, reporting).result).toEqual({ status: 'published', total });
+    }
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { add, decode, encode, sub } from '../src/ring';
+import { add, decode, encode, sub } from '../src/ring.ts';
 
 const MAX = (1n << 63n) - 1n;
 const MIN = -(1n << 63n);
