@@ -40,12 +40,13 @@ function expected(p: GroupParams, pattern: Pattern, readings: ReadonlyMap<MeterI
   const { graph, threshold: t, minGroupSize } = p;
   const active = pattern.reporting;
   if (active.size < minGroupSize) return { status: 'suppressed' };
-  // A meter joins F if it confirms and has t active neighbours to deal its self-mask shares to.
+  // A meter joins F if it confirms and has t active neighbours to deal its self-mask shares to; every meter that
+  // confirms, in F or not, passes on the shares it holds.
   const final = new Set([...active].filter((i) => pattern.confirming.has(i) && graph.get(i)!.filter((j) => active.has(j)).length >= t));
   if (final.size < minGroupSize) return { status: 'suppressed' };
   for (const i of final) {
     const ns = graph.get(i)!;
-    if (ns.filter((j) => final.has(j) && pattern.releasing.has(j)).length < t) return { status: 'aborted' };
+    if (ns.filter((j) => pattern.releasing.has(j)).length < t) return { status: 'aborted' };
     if (!pattern.releasing.has(i) && ns.some((j) => active.has(j) && !final.has(j))) return { status: 'aborted' };
   }
   let total = 0n;
@@ -111,6 +112,6 @@ it(`publishes exact totals over ${TARGET.toLocaleString('en-US')} random reading
   console.log(`[exactness] exact totals: ${JSON.stringify(exact)}`);
   console.log(`[exactness] meter-side refusals: ${JSON.stringify(Object.fromEntries(meterAborts))}`);
   expect(failures.slice(0, 5)).toEqual([]);
-  expect([...meterAborts.keys()].filter((a) => a !== 'too few active neighbours to deal shares')).toEqual([]);
+  expect([...meterAborts.keys()]).toEqual([]);
   expect(n.published).toBe(TARGET);
 }, 60 * 60_000);

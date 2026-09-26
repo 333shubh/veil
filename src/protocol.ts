@@ -226,6 +226,7 @@ interface RoundState {
   y: U64;
   active?: ReadonlySet<MeterId>;
   activeHash?: Uint8Array;
+  dealt?: boolean; // false: too few active neighbours, so this meter stays out of F but still passes on shares
   masksOut: Set<MeterId>; // neighbours whose round mask this meter has released
 }
 
@@ -307,7 +308,8 @@ export class Meter {
   /**
    * On the announced active set U: release the round masks shared with neighbours outside U (as one correction),
    * deal t-of-n shares of this round's self-mask secret to neighbours in U, MAC the set's hash to each of them, and
-   * co-sign the set with this meter's contribution.
+   * co-sign the set with this meter's contribution. A meter with fewer than t neighbours in U cannot deal, so it stays
+   * out of the total; it still confirms, releasing nothing of its own, and later passes on the shares it holds.
    */
   confirm(round: number, active: ReadonlySet<MeterId>): Confirm | Aborted {
     const e = this.current();
@@ -315,30 +317,28 @@ export class Meter {
     if (!rs || rs.phase !== 'reported') return { aborted: 'not waiting for an active set' };
     const { epoch, threshold, minGroupSize } = e.params;
     const live = e.neighbours.filter((j) => active.has(j));
-    const refusal = !active.has(this.id)
-      ? 'left out of the active set'
-      : active.size < minGroupSize
-        ? 'active set below the minimum group size'
-        : live.length < threshold
-          ? 'too few active neighbours to deal shares'
-          : undefined;
+    const refusal = !active.has(this.id) ? 'left out of the active set' : active.size < minGroupSize ? 'active set below the minimum group size' : undefined;
     if (refusal) {
       rs.phase = 'done';
       return { aborted: refusal };
     }
 
+    rs.dealt = live.length >= threshold;
     let correction: U64 = 0n;
-    for (const j of e.neighbours) {
-      if (active.has(j)) continue;
-      correction = this.signed(correction, j, this.mask(j, round));
-      rs.masksOut.add(j);
-    }
-    const secret = keystream(e.seed, epoch, round, 32); // first 8 bytes are this round's self-mask
-    const commitment = selfMaskCommitment(epoch, round, this.id, secret);
+    let commitment: Uint8Array = new Uint8Array(32);
     const shares = new Map<MeterId, Uint8Array>();
-    for (const s of split(secret, threshold, live.map(BigInt))) {
-      const j = Number(s.x);
-      shares.set(j, seal(e.pairs.get(j)!.share, u32s([this.id, j, round]), label('share'), toBytes(s.y, SHARE_BYTES)));
+    if (rs.dealt) {
+      for (const j of e.neighbours) {
+        if (active.has(j)) continue;
+        correction = this.signed(correction, j, this.mask(j, round));
+        rs.masksOut.add(j);
+      }
+      const secret = keystream(e.seed, epoch, round, 32); // first 8 bytes are this round's self-mask
+      commitment = selfMaskCommitment(epoch, round, this.id, secret);
+      for (const s of split(secret, threshold, live.map(BigInt))) {
+        const j = Number(s.x);
+        shares.set(j, seal(e.pairs.get(j)!.share, u32s([this.id, j, round]), label('share'), toBytes(s.y, SHARE_BYTES)));
+      }
     }
     const activeHash = setHash('active', epoch, round, active);
     const tags = new Map(live.map((j) => [j, tag(e.pairs.get(j)!.confirm, confirmMessage(epoch, round, activeHash))]));
@@ -357,8 +357,9 @@ export class Meter {
   }
 
   /**
-   * On the final set F (meters that confirmed): check that every neighbour confirmed the same U, then release
-   * each F neighbour's self-mask share, and remove the round masks shared with neighbours in U \ F.
+   * On the final set F (meters that dealt their shares): check that every neighbour confirmed the same U, then release
+   * each F neighbour's self-mask share and, if this meter is in F, remove the round masks it shares with neighbours
+   * in U \ F.
    */
   release(round: number, final: ReadonlySet<MeterId>, inbox: readonly Confirm[]): Release | Aborted {
     const e = this.current();
@@ -369,6 +370,7 @@ export class Meter {
     const active = rs.active!;
     if ([...final].some((i) => !active.has(i))) return { aborted: 'final set is not within the active set' };
     if (final.size < minGroupSize) return { aborted: 'final set below the minimum group size' };
+    if (final.has(this.id) && !rs.dealt) return { aborted: 'final set includes this meter, which dealt no shares' };
 
     const held = new Map<MeterId, bigint>();
     const expected = confirmMessage(epoch, round, rs.activeHash!);
@@ -396,7 +398,7 @@ export class Meter {
         if (rs.masksOut.has(j)) return { aborted: `already released the round mask shared with ${j}` };
         const s = held.get(j);
         if (s !== undefined) shares.set(j, s);
-      } else {
+      } else if (final.has(this.id)) {
         extra = this.signed(extra ?? 0n, j, this.mask(j, round));
         rs.masksOut.add(j);
       }
@@ -500,8 +502,13 @@ export class Coordinator {
     return this.pending ? { status: 'open', active } : { status: 'suppressed' };
   }
 
-  /** F is every meter in U with a valid confirmation; each confirmation is routed to the sender's neighbours in U. */
-  collect(confirms: readonly Confirm[]): { status: 'open'; final: ReadonlySet<MeterId>; inbox: Map<MeterId, Confirm[]> } | { status: 'suppressed' } {
+  /**
+   * F is every meter in U whose valid confirmation deals at least t shares. Every valid confirmation is routed to the
+   * sender's neighbours in U, and every confirmed meter is asked to release.
+   */
+  collect(
+    confirms: readonly Confirm[],
+  ): { status: 'open'; final: ReadonlySet<MeterId>; confirmed: ReadonlySet<MeterId>; inbox: Map<MeterId, Confirm[]> } | { status: 'suppressed' } {
     const p = this.current();
     const pending = this.pending;
     if (!pending) throw new Error('no active set');
@@ -513,7 +520,7 @@ export class Coordinator {
       if (!equal(c.activeHash, activeHash) || c.y !== pending.reports.get(c.id)) continue;
       if (verifyBytes(device, cosignMessage(p.epoch, pending.round, activeHash, contributionHash(p.epoch, pending.round, c)), c.signature)) valid.set(c.id, c);
     }
-    const final = new Set(valid.keys());
+    const final = new Set([...valid.values()].filter((c) => c.shares.size >= p.threshold).map((c) => c.id));
     if (final.size < p.minGroupSize) {
       this.pending = undefined;
       return { status: 'suppressed' };
@@ -522,7 +529,7 @@ export class Coordinator {
     for (const c of valid.values()) for (const j of p.graph.get(c.id)!) if (pending.active.has(j)) push(inbox, j, c);
     pending.confirms = valid;
     pending.final = final;
-    return { status: 'open', final, inbox };
+    return { status: 'open', final, confirmed: new Set(valid.keys()), inbox };
   }
 
   /**
@@ -544,7 +551,7 @@ export class Coordinator {
     const seedShares = new Map<MeterId, Share[]>();
     for (const r of releases) {
       const device = this.registry.get(r.id);
-      if (!final.has(r.id) || r.round !== round || byId.has(r.id) || !device || !equal(r.finalHash, finalHash)) continue;
+      if (!confirms.has(r.id) || r.round !== round || byId.has(r.id) || !device || !equal(r.finalHash, finalHash)) continue;
       if (r.extra && !verifyBytes(device, releaseMessage(epoch, round, r.id, finalHash, r.extra.value), r.extra.signature)) continue;
       byId.set(r.id, r);
       for (const [i, y] of r.shares) if (final.has(i) && graph.get(i)!.includes(r.id)) push(seedShares, i, { x: BigInt(r.id), y });
@@ -576,7 +583,7 @@ export class Coordinator {
         round,
         active: sortedIds(active),
         final: sortedIds(final),
-        contributions: sortedIds(final).map((i) => {
+        contributions: sortedIds(confirms.keys()).map((i) => {
           const { id, y, correction, commitment, signature } = confirms.get(i)!;
           return { id, y, correction, commitment, signature };
         }),

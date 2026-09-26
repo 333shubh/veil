@@ -1,0 +1,205 @@
+{
+  "environment": "13th Gen Intel(R) Core(TM) i5-13450HX (16 threads, pinned to logical CPU 4 (a performance core)), win32 10.0.26200, Node v22.10.0, OpenSSL 3.0.15+quic",
+  "seconds": 145,
+  "n": 200,
+  "k": 54,
+  "t": 33,
+  "random": [
+    {
+      "rate": 0,
+      "published": 20,
+      "exact": 20,
+      "included": 1,
+      "afterDeadline": {
+        "n": 20,
+        "median": 767.2334999999839,
+        "p95": 928.5589000000255,
+        "mean": 805.5016450000007,
+        "max": 985.7194000000036
+      },
+      "coordinator": {
+        "n": 20,
+        "median": 253.6314000000002,
+        "p95": 315.10519999999815,
+        "mean": 260.3181800000005,
+        "max": 324.08439999999973
+      }
+    },
+    {
+      "rate": 0.05,
+      "published": 20,
+      "exact": 20,
+      "included": 1,
+      "afterDeadline": {
+        "n": 20,
+        "median": 731.2616000000635,
+        "p95": 817.2825000000594,
+        "mean": 742.4607699999967,
+        "max": 894.7878999999375
+      },
+      "coordinator": {
+        "n": 20,
+        "median": 231.43769999999859,
+        "p95": 277.6054000000004,
+        "mean": 243.73796000000056,
+        "max": 296.2121000000043
+      }
+    },
+    {
+      "rate": 0.1,
+      "published": 20,
+      "exact": 20,
+      "included": 1,
+      "afterDeadline": {
+        "n": 20,
+        "median": 641.7474000000293,
+        "p95": 697.5055999999677,
+        "mean": 649.8561100000206,
+        "max": 719.8273000000263
+      },
+      "coordinator": {
+        "n": 20,
+        "median": 212.4461999999985,
+        "p95": 225.8831999999893,
+        "mean": 214.0760699999999,
+        "max": 245.4673999999941
+      }
+    },
+    {
+      "rate": 0.2,
+      "published": 20,
+      "exact": 20,
+      "included": 1,
+      "afterDeadline": {
+        "n": 20,
+        "median": 546.9824999999764,
+        "p95": 654.1711000000068,
+        "mean": 568.3267150000108,
+        "max": 689.3731000000553
+      },
+      "coordinator": {
+        "n": 20,
+        "median": 188.80530000000726,
+        "p95": 236.49439999999595,
+        "mean": 200.13780000000006,
+        "max": 261.9687000000122
+      }
+    },
+    {
+      "rate": 0.3,
+      "published": 20,
+      "exact": 20,
+      "included": 0.9503860065176287,
+      "afterDeadline": {
+        "n": 20,
+        "median": 434.99059999996825,
+        "p95": 461.9631000000518,
+        "mean": 425.4842549999863,
+        "max": 512.900500000098
+      },
+      "coordinator": {
+        "n": 20,
+        "median": 164.75410000002012,
+        "p95": 181.67919999999867,
+        "mean": 161.85807499999828,
+        "max": 184.93519999999262
+      }
+    },
+    {
+      "rate": 0.4,
+      "published": 20,
+      "exact": 20,
+      "included": 0.5206201268952296,
+      "afterDeadline": {
+        "n": 20,
+        "median": 219.73449999984587,
+        "p95": 360.46539999991364,
+        "mean": 234.19732999999542,
+        "max": 369.24179999981425
+      },
+      "coordinator": {
+        "n": 20,
+        "median": 89.84819999999308,
+        "p95": 138.93360000000393,
+        "mean": 92.66551000000035,
+        "max": 141.57659999998577
+      }
+    },
+    {
+      "rate": 0.5,
+      "published": 10,
+      "exact": 10,
+      "included": 0.0895782484575797,
+      "afterDeadline": {
+        "n": 20,
+        "median": 63.86380000009376,
+        "p95": 164.38099999990663,
+        "mean": 78.99539000001096,
+        "max": 180.7664999999106
+      },
+      "coordinator": {
+        "n": 20,
+        "median": 23.472200000003795,
+        "p95": 61.891499999997905,
+        "mean": 30.604719999998633,
+        "max": 67.35890000000654
+      }
+    }
+  ],
+  "crash": {
+    "published": 55,
+    "exact": 55,
+    "aborted": 45
+  },
+  "targeted": [
+    {
+      "dropped": 0,
+      "live": 54,
+      "status": "published",
+      "exact": true,
+      "targetIncluded": true
+    },
+    {
+      "dropped": 13,
+      "live": 41,
+      "status": "published",
+      "exact": true,
+      "targetIncluded": true
+    },
+    {
+      "dropped": 20,
+      "live": 34,
+      "status": "published",
+      "exact": true,
+      "targetIncluded": true
+    },
+    {
+      "dropped": 21,
+      "live": 33,
+      "status": "published",
+      "exact": true,
+      "targetIncluded": true
+    },
+    {
+      "dropped": 22,
+      "live": 32,
+      "status": "published",
+      "exact": true,
+      "targetIncluded": false
+    },
+    {
+      "dropped": 23,
+      "live": 31,
+      "status": "published",
+      "exact": true,
+      "targetIncluded": false
+    },
+    {
+      "dropped": 54,
+      "live": 0,
+      "status": "published",
+      "exact": true,
+      "targetIncluded": false
+    }
+  ]
+}

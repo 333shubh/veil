@@ -1,0 +1,87 @@
+{
+  "environment": "13th Gen Intel(R) Core(TM) i5-13450HX (16 threads, pinned to logical CPU 6 (a performance core)), win32 10.0.26200, Node v22.10.0, OpenSSL 3.0.15+quic",
+  "seconds": 55.2,
+  "rows": [
+    {
+      "n": 50,
+      "sparse": {
+        "k": 32,
+        "t": 17,
+        "setupMs": 612.4698999999999,
+        "setupBytes": 4488,
+        "meterMs": 1.7708343999999911,
+        "coordinatorMs": 31.224180000000025,
+        "roundBytes": 7512.000000000017
+      },
+      "complete": {
+        "k": 49,
+        "t": 25,
+        "setupMs": 713.1293000000001,
+        "setupBytes": 6800,
+        "meterMs": 1.9566927999999955,
+        "coordinatorMs": 38.70401999999994,
+        "roundBytes": 11166.99999999993
+      },
+      "ratio": {
+        "setup": 0.8588483182502806,
+        "meter": 0.9050140113971877,
+        "coordinator": 0.8067425554244771,
+        "bytes": 0.6726963374227692
+      }
+    },
+    {
+      "n": 100,
+      "sparse": {
+        "k": 38,
+        "t": 21,
+        "setupMs": 1201.8733000000002,
+        "setupBytes": 5304,
+        "meterMs": 1.8200607999999974,
+        "coordinatorMs": 66.14643999999971,
+        "roundBytes": 9201.999999999935
+      },
+      "complete": {
+        "k": 99,
+        "t": 50,
+        "setupMs": 3161.8482000000004,
+        "setupBytes": 13600,
+        "meterMs": 5.344294400000028,
+        "coordinatorMs": 215.70954000000057,
+        "roundBytes": 22316.99999999985
+      },
+      "ratio": {
+        "setup": 0.3801173313759971,
+        "meter": 0.34056147805030873,
+        "coordinator": 0.3066458720369972,
+        "bytes": 0.41233140655105954
+      }
+    },
+    {
+      "n": 200,
+      "sparse": {
+        "k": 54,
+        "t": 33,
+        "setupMs": 3469.5072,
+        "setupBytes": 7480,
+        "meterMs": 2.7415372999999796,
+        "coordinatorMs": 217.26668000000026,
+        "roundBytes": 13441.999999999884
+      },
+      "complete": {
+        "k": 199,
+        "t": 100,
+        "setupMs": 12500.5965,
+        "setupBytes": 27200,
+        "meterMs": 14.947899799999936,
+        "coordinatorMs": 1687.0922199999964,
+        "roundBytes": 44616.999999999665
+      },
+      "ratio": {
+        "setup": 0.27754733144134364,
+        "meter": 0.18340618660020663,
+        "coordinator": 0.1287817449599766,
+        "bytes": 0.3012752986529795
+      }
+    }
+  ]
+}

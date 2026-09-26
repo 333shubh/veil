@@ -11,7 +11,13 @@
     "test": "vitest run --exclude test/exactness.test.ts",
     "test:exactness": "vitest run test/exactness.test.ts",
     "typecheck": "tsc --noEmit",
-    "e7": "node --experimental-strip-types --disable-warning=ExperimentalWarning experiments/e7.ts"
+    "e1": "node --experimental-strip-types --disable-warning=ExperimentalWarning experiments/e1.ts",
+    "e2": "node --experimental-strip-types --disable-warning=ExperimentalWarning experiments/e2.ts",
+    "e3": "node --experimental-strip-types --disable-warning=ExperimentalWarning experiments/e3.ts",
+    "e4": "node --experimental-strip-types --disable-warning=ExperimentalWarning experiments/e4.ts",
+    "e7": "node --experimental-strip-types --disable-warning=ExperimentalWarning experiments/e7.ts",
+    "e8": "node --experimental-strip-types --disable-warning=ExperimentalWarning experiments/e8.ts",
+    "claims": "node --experimental-strip-types --disable-warning=ExperimentalWarning experiments/claims.ts"
   },
   "devDependencies": {
     "@types/node": "^22.20.4",
