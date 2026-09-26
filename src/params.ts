@@ -6,7 +6,7 @@ export interface Design {
   corrupt: number; // fraction of meters colluding with the operator
   dropout: number; // chance that a meter misses a round
   privacyLog2: number; // bound per group per epoch on a privacy failure (below)
-  recoveryLog2: number; // bound per group per round on an aborted round
+  recoveryLog2: number; // bound per group per round on a meter being left out of the total
   roundsPerEpoch: number;
 }
 
@@ -17,7 +17,7 @@ export const DESIGN: Design = { corrupt: 0.2, dropout: 0.1, privacyLog2: -40, re
 export interface Failure {
   privacy: number; // some honest meter has >= t corrupt neighbours, or partition (below), in one epoch
   partition: number; // in some round, the honest reporters split into parts the operator could total separately
-  recovery: number; // in one round, some seed or key has fewer than t live holders, so the round aborts
+  recovery: number; // in one round, some needed meter has fewer than t live neighbours, so it is left out
 }
 
 export interface Choice extends Failure {
