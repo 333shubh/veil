@@ -2,8 +2,8 @@
 // the true total of the active meters bit for bit, and every pattern that cannot be recovered is
 // suppressed or aborted instead of published.
 import { expect, it } from 'vitest';
-import type { GroupParams, MeterId, RoundResult } from '../src/protocol';
-import { distinctIds, randomGraph, Rng, runRound, setupGroup } from './support';
+import type { GroupParams, MeterId, RoundResult } from '../src/protocol.ts';
+import { distinctIds, randomGraph, Rng, runRound, setupGroup } from './support.ts';
 
 const SEED = 0x7e11;
 const TARGET = 10_000;
