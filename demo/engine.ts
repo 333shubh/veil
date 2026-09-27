@@ -6,7 +6,8 @@ import { randomBytes } from 'node:crypto';
 import { ed25519Keygen, type SigningKey } from '../src/crypto.ts';
 import { audit, Ledger, recordFor, signAnchor } from '../src/ledger.ts';
 import { simulateLoad, type Load } from '../src/load.ts';
-import { choose, DESIGN, MIN_GROUP_SIZE } from '../src/params.ts';
+import { choose, DESIGN, MIN_GROUP_SIZE, PLAUSIBLE } from '../src/params.ts';
+import { implausible } from '../src/plausibility.ts';
 import {
   anchoredParams,
   Coordinator,
@@ -66,6 +67,7 @@ export interface Counters {
   published: number;
   exact: number;
   mismatches: number;
+  flagged: number; // published totals the plausibility checks flagged
   suppressed: number;
   aborted: number;
 }
@@ -78,7 +80,10 @@ export interface Snapshot {
   status: 'published' | 'suppressed' | 'aborted';
   reason?: string;
   total: number | null; // W, the published total
-  truth: number | null; // W, the true total of the same homes
+  truth: number | null; // W, the sum of what the same homes reported: equal to the total, bit for bit
+  consumption: number | null; // W, what the same homes drew: differs from the total by any lie
+  implausible: string[]; // plausibility problems with the published total
+  lie?: { house: MeterId; watts: number }; // a home reporting more (or less) than it draws
   included: number;
   counters: Counters;
   readings: Int32Array; // W per house: what the operator would see without Veil
@@ -108,7 +113,9 @@ export class Engine {
   private readonly secrets: Map<MeterId, Uint8Array>;
   private params!: GroupParams;
   private readonly unplugged = new Set<MeterId>();
-  private readonly counters: Counters = { rounds: 0, published: 0, exact: 0, mismatches: 0, suppressed: 0, aborted: 0 };
+  private readonly counters: Counters = { rounds: 0, published: 0, exact: 0, mismatches: 0, flagged: 0, suppressed: 0, aborted: 0 };
+  private readonly liars = new Map<MeterId, number>(); // W each lying home adds to its reports
+  private previous?: { total: bigint; homes: number };
   private round = 0;
   private billed: MeterId;
   private last?: { round: number; total: bigint; evidence: RoundEvidence; recorded: boolean };
@@ -168,6 +175,12 @@ export class Engine {
     else this.unplugged.add(house);
   }
 
+  /** Make a home report `watts` more than it draws (0 stops it); one liar at a time. */
+  lie(house: MeterId, watts: number): void {
+    this.liars.clear();
+    if (watts !== 0) this.liars.set(house, watts);
+  }
+
   bill(house: MeterId): void {
     this.billed = house;
   }
@@ -200,7 +213,7 @@ export class Engine {
 
     const aborts: string[] = [];
     const reports = await parallel((s) =>
-      s.remote.call<Report[]>('report', round, new Map(s.ids.filter((id) => reporting.has(id)).map((id) => [id, BigInt(readings[id - 1]!)]))),
+      s.remote.call<Report[]>('report', round, new Map(s.ids.filter((id) => reporting.has(id)).map((id) => [id, BigInt(readings[id - 1]! + (this.liars.get(id) ?? 0))]))),
     );
     lap('report');
     let result: { status: 'published'; total: bigint; evidence: RoundEvidence } | { status: 'suppressed' } | { status: 'aborted'; reason: string } = {
@@ -259,9 +272,16 @@ export class Engine {
     this.counters[result.status]++;
     let total: number | null = null;
     let truth: number | null = null;
+    let consumption: number | null = null;
+    let flags: string[] = [];
     const included = result.status === 'published' ? new Set(result.evidence.final) : new Set<MeterId>();
     if (result.status === 'published') {
-      const expected = result.evidence.final.reduce((a, id) => a + BigInt(readings[id - 1]!), 0n);
+      const expected = result.evidence.final.reduce((a, id) => a + BigInt(readings[id - 1]! + (this.liars.get(id) ?? 0)), 0n);
+      consumption = result.evidence.final.reduce((a, id) => a + readings[id - 1]!, 0);
+      const now = { total: result.total, homes: result.evidence.final.length };
+      flags = implausible(now, PLAUSIBLE, this.previous);
+      if (flags.length) this.counters.flagged++;
+      this.previous = now;
       total = Number(result.total);
       truth = Number(expected);
       if (result.total === expected) this.counters.exact++;
@@ -278,6 +298,9 @@ export class Engine {
       reason: result.status === 'aborted' ? result.reason : undefined,
       total,
       truth,
+      consumption,
+      implausible: flags,
+      lie: [...this.liars].map(([house, watts]) => ({ house, watts }))[0],
       included: included.size,
       counters: { ...this.counters },
       readings,

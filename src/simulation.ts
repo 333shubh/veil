@@ -17,6 +17,7 @@ import {
   type Release,
   type Report,
   type RoundResult,
+  type CoordinatorOptions,
   type Unmask,
 } from './protocol.ts';
 
@@ -30,10 +31,15 @@ export interface Group {
   params: GroupParams;
   anchor: EpochAnchor;
   keys: PublicKeys[]; // the epoch's signed keys, one per meter
+  rangeBits?: number; // verified mode
+}
+
+export interface GroupOptions extends CoordinatorOptions {
+  rangeBits?: number; // verified mode, anchored for every epoch of the group
 }
 
 /** Devices, meters, coordinator and ledger for a roster, then its first epoch. */
-export function setupGroup(ids: MeterId[], epoch: number, k: number, threshold: number, minGroupSize = 3): Group {
+export function setupGroup(ids: MeterId[], epoch: number, k: number, threshold: number, minGroupSize = 3, options: GroupOptions = {}): Group {
   const devices = new Map(ids.map((id) => [id, ed25519Keygen()]));
   const registry = new Map(ids.map((id) => [id, devices.get(id)!.publicKey]));
   const secrets = new Map(ids.map((id) => [id, randomBytes(32)]));
@@ -44,7 +50,8 @@ export function setupGroup(ids: MeterId[], epoch: number, k: number, threshold: 
     operator,
     ledger: new Ledger(operator.publicKey, registry),
     meters: new Map(ids.map((id) => [id, new Meter(id, devices.get(id)!, secrets.get(id)!, registry)])),
-    coordinator: new Coordinator(secrets, registry),
+    coordinator: new Coordinator(secrets, registry, options),
+    rangeBits: options.rangeBits,
   } as Group;
   startEpoch(g, epoch, k, threshold, minGroupSize);
   return g;
@@ -52,7 +59,7 @@ export function setupGroup(ids: MeterId[], epoch: number, k: number, threshold: 
 
 /** Epoch setup: anchor roster and beacon on the ledger, derive the graph, exchange device-signed keys and ML-KEM secrets. */
 export function startEpoch(g: Group, epoch: number, k: number, threshold: number, minGroupSize = 3): void {
-  g.anchor = signAnchor(g.operator, { epoch, roster: g.ids, beacon: randomBytes(32), k });
+  g.anchor = signAnchor(g.operator, { epoch, roster: g.ids, beacon: randomBytes(32), k, ...(g.rangeBits ? { rangeBits: g.rangeBits } : {}) });
   g.ledger.anchor(g.anchor);
   g.params = anchoredParams(g.anchor, g.registry, threshold, minGroupSize);
   g.coordinator.startEpoch(g.params, g.anchor);

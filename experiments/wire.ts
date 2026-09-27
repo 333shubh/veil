@@ -1,10 +1,12 @@
 // Bytes on the wire, under a plain fixed-width binary encoding of each message as the implementation builds it.
-import type { Check, Confirm, MeterId, Release, Unmask } from '../src/protocol.ts';
+import type { Check, Confirm, MeterId, Release, Report, Unmask } from '../src/protocol.ts';
 import type { RoundTrace } from '../src/simulation.ts';
 
-export const BYTES = { id: 4, round: 4, u64: 8, hash: 32, signature: 64, tag: 16, share: 33, sealed: 33 + 16, key: 32, secret: 32 };
+export const BYTES = { id: 4, round: 4, u64: 8, hash: 32, signature: 64, tag: 16, share: 33, sealed: 33 + 16, key: 32, secret: 32, scalar: 32 };
 
 export const reportBytes = BYTES.id + BYTES.round + BYTES.u64 + BYTES.tag;
+/** A report as sent; in verified mode it also carries the commitment and the range proof. */
+export const reportSize = (r: Report) => reportBytes + (r.pedersen ? BYTES.key + r.proof!.length : 0);
 export const kemKeyBytes = 1184;
 export const keysBytes = BYTES.id + 4 + 2 * BYTES.key + kemKeyBytes + BYTES.signature;
 /** Setup message from the lower id of a pair: from, to, epoch, ML-KEM ciphertext, signature. */
@@ -16,23 +18,23 @@ export const setBytes = (roster: number) => BYTES.round + Math.ceil(roster / 8);
 export const setListBytes = (size: number) => BYTES.round + BYTES.id * size;
 
 export const confirmBytes = (c: Confirm) =>
-  BYTES.id + BYTES.round + 2 * BYTES.hash + 2 * BYTES.u64 + BYTES.signature + c.tags.size * (BYTES.id + BYTES.tag) + c.shares.size * (BYTES.id + BYTES.sealed);
+  BYTES.id + BYTES.round + 2 * BYTES.hash + 2 * BYTES.u64 + BYTES.signature + c.tags.size * (BYTES.id + BYTES.tag) + c.shares.size * (BYTES.id + BYTES.sealed) + (c.pedersen ? BYTES.key + BYTES.scalar : 0);
 
 /** The part of a confirmation relayed to one neighbour: header, its tag and its sealed share. */
 export const relayedConfirmBytes = (c: Confirm, to: MeterId) =>
   BYTES.id + BYTES.round + BYTES.hash + (c.tags.has(to) ? BYTES.tag : 0) + (c.shares.has(to) ? BYTES.sealed : 0);
 
-/** A sealed removal: the 8-byte value and its signature, plus the AEAD tag. */
-const escrowBytes = BYTES.u64 + BYTES.signature + 16;
+/** A sealed removal: the 8-byte value (and in verified mode its blinding part) and its signature, plus the AEAD tag. */
+const escrowBytes = (verified: boolean) => BYTES.u64 + (verified ? BYTES.scalar : 0) + BYTES.signature + 16;
 
 export const checkBytes = (c: Check) =>
-  BYTES.id + BYTES.round + BYTES.hash + c.agree.size * (BYTES.id + BYTES.tag) + (c.escrow ? escrowBytes + c.escrow.shares.size * (BYTES.id + BYTES.sealed) : 0);
+  BYTES.id + BYTES.round + BYTES.hash + c.agree.size * (BYTES.id + BYTES.tag) + (c.escrow ? escrowBytes(c.escrow.sealed.length > escrowBytes(false)) + c.escrow.shares.size * (BYTES.id + BYTES.sealed) : 0);
 
 /** The part of a check relayed to one neighbour in F: header, its agreement MAC and its sealed escrow-key share. */
 export const relayedCheckBytes = (c: Check, to: MeterId) =>
   BYTES.id + BYTES.round + BYTES.hash + (c.agree.has(to) ? BYTES.tag : 0) + (c.escrow?.shares.has(to) ? BYTES.sealed : 0);
 
-export const releaseBytes = (r: Release) => BYTES.id + BYTES.round + BYTES.hash + BYTES.secret + (r.removal ? BYTES.u64 + BYTES.signature : 0);
+export const releaseBytes = (r: Release) => BYTES.id + BYTES.round + BYTES.hash + BYTES.secret + (r.removal ? BYTES.u64 + (r.removal.valueQ === undefined ? 0 : BYTES.scalar) + BYTES.signature : 0);
 
 export const unmaskBytes = (u: Unmask) => BYTES.id + BYTES.round + BYTES.hash + (u.shares.size + u.keys.size) * (BYTES.id + BYTES.share);
 
@@ -45,7 +47,7 @@ export interface MeterBytes {
 export function perMeter(trace: RoundTrace, roster: number): Map<MeterId, MeterBytes> {
   const out = new Map<MeterId, MeterBytes>();
   for (const r of trace.reports) {
-    out.set(r.id, { sent: { report: reportBytes, confirm: 0, check: 0, release: 0, unmask: 0 }, received: { sets: 0, confirms: 0, checks: 0 } });
+    out.set(r.id, { sent: { report: reportSize(r), confirm: 0, check: 0, release: 0, unmask: 0 }, received: { sets: 0, confirms: 0, checks: 0 } });
   }
   for (const [id, b] of out) {
     if (trace.active) b.received.sets += setBytes(roster);

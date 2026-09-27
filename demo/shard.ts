@@ -5,6 +5,7 @@ import { Buffer } from 'buffer';
 import type { SigningKey } from '../src/crypto.ts';
 import { Meter, type Check, type Confirm, type Encapsulation, type EpochAnchor, type GroupParams, type MeterId, type PublicKeys } from '../src/protocol.ts';
 import { Collusion } from './collusion.ts';
+import { VerifiedDemo, type LieKind } from './verified.ts';
 
 export interface Request {
   seq: number;
@@ -39,6 +40,7 @@ export function hydrate<T>(v: T): T {
 export function host(): (req: Request) => Response {
   const meters = new Map<MeterId, Meter>();
   let collusion: Collusion | undefined;
+  let verified: VerifiedDemo | undefined;
   const all = () => [...meters.values()];
   const methods: Record<string, (...args: never[]) => unknown> = {
     init(devices: [MeterId, SigningKey][], secrets: Map<MeterId, Uint8Array>, registry: Map<MeterId, Uint8Array>) {
@@ -58,6 +60,10 @@ export function host(): (req: Request) => Response {
     collusion(corrupt: number, reading: bigint) {
       collusion ??= new Collusion();
       return collusion.attack(corrupt, reading);
+    },
+    verified(kind: LieKind) {
+      verified ??= new VerifiedDemo();
+      return verified.run(kind);
     },
   };
   return (req) => {

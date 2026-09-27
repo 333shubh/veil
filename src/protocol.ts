@@ -31,6 +31,7 @@ import {
   type SigningKey,
 } from './crypto.ts';
 import { harary } from './graph.ts';
+import { commit, hashToScalar, mod as modL, prove, SCALAR_BYTES, scalarBytes, sumsTo, verify as verifyRange, wideScalar } from './pedersen.ts';
 import { add, decode, encode, sub, type U64 } from './ring.ts';
 import { combine, SHARE_BYTES, split, toBigInt, toBytes, type Share } from './shamir.ts';
 
@@ -41,14 +42,16 @@ export interface GroupParams {
   threshold: number; // t: shares needed to rebuild a round's self-mask, and neighbours that must agree on F
   minGroupSize: number; // totals over fewer meters are never published
   graph: ReadonlyMap<MeterId, readonly MeterId[]>; // symmetric neighbour lists N(i)
+  rangeBits?: number; // verified mode: every report carries a Pedersen commitment and a range proof of this many bits
 }
 
-/** Recorded on the ledger at epoch setup and signed by the operator; fixes the roster and the graph. */
+/** Recorded on the ledger at epoch setup and signed by the operator; fixes the roster, the graph and the mode. */
 export interface EpochAnchor {
   epoch: number;
   roster: readonly MeterId[];
   beacon: Uint8Array; // public randomness for the epoch; the graph seed is derived from it and the roster
   k: number;
+  rangeBits?: number; // verified mode, if set
   signature: Uint8Array;
 }
 
@@ -75,6 +78,8 @@ export interface Report {
   round: number;
   y: U64;
   tag: Uint8Array; // HMAC under the epoch's report key
+  pedersen?: Uint8Array; // verified mode: C_i = x_i G + r_i H, under the MAC
+  proof?: Uint8Array; // verified mode: range proof for C_i
 }
 
 /** Sent once the active set U is announced: the signed contribution, neighbour confirmations and dealt shares. */
@@ -85,6 +90,8 @@ export interface Confirm {
   y: U64;
   correction: U64; // sum of s_ij m_ij(t) over neighbours outside U
   commitment: Uint8Array; // SHA-256 over this round's self-mask secret
+  pedersen?: Uint8Array; // verified mode: the report's C_i
+  correctionQ?: bigint; // verified mode: sum of s_ij R_ij(t) over neighbours outside U, mod the group order
   signature: Uint8Array; // device co-signature over the active set and this contribution
   tags: ReadonlyMap<MeterId, Uint8Array>; // per neighbour in U: MAC of the active-set hash under the pair key
   shares: ReadonlyMap<MeterId, Uint8Array>; // per neighbour in U: sealed Shamir share of the self-mask secret
@@ -94,6 +101,7 @@ export interface Confirm {
 export interface Removal {
   id: MeterId;
   value: U64; // sum of s_ij m_ij(t) over neighbours in U \ F
+  valueQ?: bigint; // verified mode: sum of s_ij R_ij(t) over the same neighbours
   signature: Uint8Array;
 }
 
@@ -137,6 +145,8 @@ export interface Contribution {
   y: U64;
   correction: U64;
   commitment: Uint8Array;
+  pedersen?: Uint8Array;
+  correctionQ?: bigint;
   signature: Uint8Array;
 }
 
@@ -149,6 +159,7 @@ export interface RoundEvidence {
   contributions: Contribution[];
   secrets: ReadonlyMap<MeterId, Uint8Array>; // self-mask secrets of F, revealed or rebuilt
   removals: Removal[]; // signed removals of meters in F with neighbours in U \ F
+  blinding?: bigint; // verified mode: R = sum over F of r_i, so that sum over F of C_i = total G + R H
 }
 
 export type RoundResult =
@@ -183,19 +194,41 @@ const sortedIds = (ids: Iterable<MeterId>) => [...ids].sort((a, b) => a - b);
 export const setHash = (kind: 'active' | 'final', epoch: number, round: number, ids: Iterable<MeterId>) =>
   sha256(label(kind), u32s([epoch, round]), u32s(sortedIds(ids)));
 
+const NONE = Buffer.alloc(0);
+const scalarOrNone = (s: bigint | undefined) => (s === undefined ? NONE : scalarBytes(s));
+
+/** Hash of the parts of a contribution that stay off the ledger: the masked value and what removes its masks. */
+export const maskedDigest = (c: Omit<Contribution, 'signature' | 'id' | 'pedersen'>) =>
+  sha256(label('masked'), le64(c.y), le64(c.correction), c.commitment, scalarOrNone(c.correctionQ));
+
+/** A contribution's hash from its off-ledger digest and its public commitment, so validators can check the latter. */
+export const contributionFromDigest = (epoch: number, round: number, id: MeterId, digest: Uint8Array, pedersen: Uint8Array | undefined) =>
+  sha256(label('contribution'), u32s([epoch, round, id]), digest, pedersen ?? NONE);
+
 export const contributionHash = (epoch: number, round: number, c: Omit<Contribution, 'signature'>) =>
-  sha256(label('contribution'), u32s([epoch, round, c.id]), le64(c.y), le64(c.correction), c.commitment);
+  contributionFromDigest(epoch, round, c.id, maskedDigest(c), c.pedersen);
 
 export const cosignMessage = (epoch: number, round: number, activeHash: Uint8Array, contribution: Uint8Array) =>
   Buffer.concat([label('cosign'), u32s([epoch, round]), activeHash, contribution]);
 
-export const removalMessage = (epoch: number, round: number, id: MeterId, finalHash: Uint8Array, value: U64) =>
-  Buffer.concat([label('removal'), u32s([epoch, round, id]), finalHash, le64(value)]);
+export const removalMessage = (epoch: number, round: number, id: MeterId, finalHash: Uint8Array, value: U64, valueQ?: bigint) =>
+  Buffer.concat([label('removal'), u32s([epoch, round, id]), finalHash, le64(value), scalarOrNone(valueQ)]);
 
 export const selfMaskCommitment = (epoch: number, round: number, id: MeterId, secret: Uint8Array) =>
   sha256(label('selfmask'), u32s([epoch, round, id]), secret);
 
-const reportMessage = (epoch: number, round: number, id: MeterId, y: U64) => Buffer.concat([label('report'), u32s([epoch, round, id]), le64(y)]);
+/** Verified mode: the self part S_i(t) of a meter's blinding, derived from the round secret the coordinator learns. */
+export const selfBlinding = (secret: Uint8Array) => hashToScalar(label('selfblind'), secret);
+
+/** Verified mode: what a range proof is bound to, so it cannot be replayed for another meter or round. */
+export const proofContext = (epoch: number, round: number, id: MeterId) => Buffer.concat([label('range'), u32s([epoch, round, id])]);
+
+const reportMessage = (epoch: number, round: number, id: MeterId, y: U64, pedersen?: Uint8Array) =>
+  Buffer.concat([label('report'), u32s([epoch, round, id]), le64(y), pedersen ?? NONE]);
+
+/** A report's MAC, for replays in which a meter tampers with its own report. */
+export const reportTag = (key: Uint8Array, epoch: number, round: number, id: MeterId, y: U64, pedersen?: Uint8Array) =>
+  tag(key, reportMessage(epoch, round, id, y, pedersen));
 const keysMessage = (k: Omit<PublicKeys, 'signature'>) => Buffer.concat([label('keys'), u32s([k.epoch, k.id]), k.mask, k.channel, k.kem]);
 const encapsulationMessage = (e: Omit<Encapsulation, 'signature'>) => Buffer.concat([label('kem'), u32s([e.epoch, e.from, e.to]), e.ciphertext]);
 // Pair MACs name sender and receiver, so the relay cannot reflect a meter's own MAC back to it as its neighbour's.
@@ -205,14 +238,21 @@ const agreeMessage = (epoch: number, round: number, from: MeterId, to: MeterId, 
   Buffer.concat([label('agree'), u32s([epoch, round, from, to]), activeHash, finalHash]);
 const escrowAad = (epoch: number, round: number, id: MeterId) => Buffer.concat([label('escrow'), u32s([epoch, round, id])]);
 
+const SIGNATURE_BYTES = 64;
+
+/** A removal as escrowed: the value, in verified mode its blinding part, then the signature. */
+const escrowPlaintext = (r: Removal) => Buffer.concat([le64(r.value), scalarOrNone(r.valueQ), r.signature]);
+
 /** Open an escrowed removal with its rebuilt key; throws if the key or the ciphertext is wrong. */
 export function openEscrow(epoch: number, round: number, id: MeterId, key: Uint8Array, sealed: Uint8Array): Removal {
-  const plain = open(key, u32s([epoch, round, id]), escrowAad(epoch, round, id), sealed);
-  return { id, value: Buffer.from(plain).readBigUInt64LE(0), signature: Buffer.from(plain.subarray(8)) };
+  const plain = Buffer.from(open(key, u32s([epoch, round, id]), escrowAad(epoch, round, id), sealed));
+  const removal: Removal = { id, value: plain.readBigUInt64LE(0), signature: plain.subarray(plain.length - SIGNATURE_BYTES) };
+  if (plain.length === 8 + SCALAR_BYTES + SIGNATURE_BYTES) removal.valueQ = wideScalar(plain.subarray(8, 8 + SCALAR_BYTES));
+  return removal;
 }
 
 export const anchorMessage = (a: Omit<EpochAnchor, 'signature'>) =>
-  Buffer.concat([label('anchor'), u32s([a.epoch, a.k]), a.beacon, u32s(sortedIds(a.roster))]);
+  Buffer.concat([label('anchor'), u32s([a.epoch, a.k, a.rangeBits ?? 0]), a.beacon, u32s(sortedIds(a.roster))]);
 
 export function rosterHash(epoch: number, roster: readonly MeterId[], registry: ReadonlyMap<MeterId, Uint8Array>): Buffer {
   const entries = sortedIds(roster).map((id) => {
@@ -235,7 +275,9 @@ export function anchoredGraph(anchor: EpochAnchor, registry: ReadonlyMap<MeterId
 
 /** Build the epoch's parameters from its anchor. */
 export function anchoredParams(anchor: EpochAnchor, registry: ReadonlyMap<MeterId, Uint8Array>, threshold: number, minGroupSize: number): GroupParams {
-  return { epoch: anchor.epoch, threshold, minGroupSize, graph: anchoredGraph(anchor, registry) };
+  const params: GroupParams = { epoch: anchor.epoch, threshold, minGroupSize, graph: anchoredGraph(anchor, registry) };
+  if (anchor.rangeBits) params.rangeBits = anchor.rangeBits;
+  return params;
 }
 
 function checkParams(p: GroupParams, id: MeterId, neighbours: readonly MeterId[] | undefined): readonly MeterId[] {
@@ -249,12 +291,16 @@ function checkParams(p: GroupParams, id: MeterId, neighbours: readonly MeterId[]
   if (!Number.isInteger(p.threshold) || p.threshold < 1 || p.threshold > neighbours.length) {
     throw new RangeError(`threshold ${p.threshold} does not fit degree ${neighbours.length} of meter ${id}`);
   }
+  if (p.rangeBits !== undefined && (!Number.isInteger(p.rangeBits) || p.rangeBits < 2 || p.rangeBits > 62)) {
+    throw new RangeError(`range of ${p.rangeBits} bits is not supported`);
+  }
   return neighbours;
 }
 
-/** A party accepts an epoch only if its parameters match the anchored roster and graph. */
+/** A party accepts an epoch only if its parameters match the anchored roster, graph and mode. */
 function checkAnchor(p: GroupParams, anchor: EpochAnchor, registry: ReadonlyMap<MeterId, Uint8Array>, id?: MeterId): void {
   if (anchor.epoch !== p.epoch) throw new Error('parameters are for a different epoch than the anchor');
+  if ((anchor.rangeBits ?? 0) !== (p.rangeBits ?? 0)) throw new Error('verified mode differs from the anchor');
   const graph = anchoredGraph(anchor, registry);
   if (graph.size !== p.graph.size || anchor.roster.some((m) => !p.graph.has(m))) throw new Error('roster differs from the anchor');
   for (const m of id === undefined ? anchor.roster : [id]) {
@@ -315,6 +361,7 @@ interface RoundState {
   escrowed: Map<MeterId, bigint>; // escrow-key shares of neighbours that agreed with this meter's view
   masksOut: Set<MeterId>; // neighbours whose round mask this meter has released
   removal?: Removal;
+  pedersen?: Uint8Array; // verified mode: this round's commitment
 }
 
 interface EpochState {
@@ -420,15 +467,29 @@ export class Meter {
     e.peers.clear();
   }
 
-  /** y_i(t) = x_i(t) + PRG(b_i, t) + sum_{j in N(i)} s_ij PRG(k_ij, t)  (mod 2^64), s_ij = +1 iff id_i < id_j. */
+  /**
+   * y_i(t) = x_i(t) + PRG(b_i, t) + sum_{j in N(i)} s_ij PRG(k_ij, t)  (mod 2^64), s_ij = +1 iff id_i < id_j.
+   * Verified mode adds C_i = x_i G + r_i H with r_i = S_i(t) + sum_{j in N(i)} s_ij R_ij(t) (mod the group order), built
+   * like the masks so that the blindings of a total's meters sum to what the coordinator can recover, and a range proof.
+   */
   report(round: number, reading: bigint): Report {
     const e = this.current();
     if (!isU32(round)) throw new RangeError(`round ${round} is not a u32`);
     if (e.rounds.has(round)) throw new Error(`meter ${this.id} already reported round ${round}`);
-    let y = add(encode(reading), prg(e.seed, e.params.epoch, round));
+    const { epoch, rangeBits } = e.params;
+    let y = add(encode(reading), prg(e.seed, epoch, round));
     for (const j of e.neighbours) y = this.signed(y, j, this.mask(j, round));
-    e.rounds.set(round, { phase: 'reported', y, held: new Map(), escrowed: new Map(), masksOut: new Set() });
-    return { id: this.id, round, y, tag: tag(e.reportKey, reportMessage(e.params.epoch, round, this.id, y)) };
+    const rs: RoundState = { phase: 'reported', y, held: new Map(), escrowed: new Map(), masksOut: new Set() };
+    const report: Report = { id: this.id, round, y, tag: new Uint8Array(0) };
+    if (rangeBits) {
+      let r = selfBlinding(this.secret(round));
+      for (const j of e.neighbours) r = this.signedQ(r, j, this.blind(j, round));
+      report.proof = prove(reading, r, rangeBits, proofContext(epoch, round, this.id));
+      report.pedersen = rs.pedersen = commit(reading, r);
+    }
+    e.rounds.set(round, rs);
+    report.tag = tag(e.reportKey, reportMessage(epoch, round, this.id, y, report.pedersen));
+    return report;
   }
 
   /**
@@ -451,12 +512,14 @@ export class Meter {
 
     rs.dealt = live.length >= threshold;
     let correction: U64 = 0n;
+    let correctionQ = 0n;
     let commitment: Uint8Array = new Uint8Array(32);
     const shares = new Map<MeterId, Uint8Array>();
     if (rs.dealt) {
       for (const j of e.neighbours) {
         if (active.has(j)) continue;
         correction = this.signed(correction, j, this.mask(j, round));
+        if (rs.pedersen) correctionQ = this.signedQ(correctionQ, j, this.blind(j, round));
         rs.masksOut.add(j);
       }
       const secret = this.secret(round);
@@ -468,7 +531,8 @@ export class Meter {
     }
     const activeHash = setHash('active', epoch, round, active);
     const tags = new Map(live.map((j) => [j, tag(e.pairs.get(j)!.confirm, confirmMessage(epoch, round, this.id, j, activeHash))]));
-    const contribution = { id: this.id, y: rs.y, correction, commitment };
+    const contribution: Omit<Contribution, 'signature'> = { id: this.id, y: rs.y, correction, commitment };
+    if (rs.pedersen) Object.assign(contribution, { pedersen: rs.pedersen, correctionQ });
     rs.phase = 'confirmed';
     rs.active = active;
     rs.activeHash = activeHash;
@@ -532,18 +596,22 @@ export class Meter {
     const covered = e.neighbours.filter((j) => active.has(j) && !final.has(j));
     if (covered.length > 0) {
       let value: U64 = 0n;
+      let valueQ = 0n;
       for (const j of covered) {
         value = this.signed(value, j, this.mask(j, round));
+        if (rs.pedersen) valueQ = this.signedQ(valueQ, j, this.blind(j, round));
         rs.masksOut.add(j);
       }
-      rs.removal = { id: this.id, value, signature: signBytes(this.device, removalMessage(epoch, round, this.id, finalHash, value)) };
+      const q = rs.pedersen ? valueQ : undefined;
+      rs.removal = { id: this.id, value, signature: signBytes(this.device, removalMessage(epoch, round, this.id, finalHash, value, q)) };
+      if (q !== undefined) rs.removal.valueQ = q;
       const key = randomBytes(32);
       const shares = new Map<MeterId, Uint8Array>();
       for (const s of split(key, threshold, partners.map(BigInt))) {
         const j = Number(s.x);
         shares.set(j, seal(e.pairs.get(j)!.escrow, u32s([this.id, j, round]), label('escrow-share'), toBytes(s.y, SHARE_BYTES)));
       }
-      check.escrow = { sealed: seal(key, u32s([epoch, round, this.id]), escrowAad(epoch, round, this.id), Buffer.concat([le64(value), rs.removal.signature])), shares };
+      check.escrow = { sealed: seal(key, u32s([epoch, round, this.id]), escrowAad(epoch, round, this.id), escrowPlaintext(rs.removal)), shares };
       key.fill(0);
     }
     return check;
@@ -629,6 +697,16 @@ export class Meter {
     return this.id < j ? add(acc, mask) : sub(acc, mask);
   }
 
+  /** Verified mode: R_ij(t), the pair's blinding share, from the 64 keystream bytes after the round mask. */
+  private blind(j: MeterId, round: number): bigint {
+    const e = this.current();
+    return wideScalar(keystream(e.pairs.get(j)!.mask, e.params.epoch, round, 72).subarray(8));
+  }
+
+  private signedQ(acc: bigint, j: MeterId, blind: bigint): bigint {
+    return modL(this.id < j ? acc + blind : acc - blind);
+  }
+
   /** Overwrite the epoch's secrets; key objects are dropped with the state. */
   private erase(): void {
     const e = this.epoch;
@@ -642,6 +720,7 @@ export class Meter {
 interface Pending {
   round: number;
   reports: Map<MeterId, U64>;
+  pedersen: Map<MeterId, Uint8Array>; // verified mode: each report's commitment
   active: ReadonlySet<MeterId>;
   confirms?: Map<MeterId, Confirm>;
   final?: ReadonlySet<MeterId>;
@@ -651,18 +730,29 @@ interface Pending {
   missing?: { secrets: Set<MeterId>; removals: Set<MeterId> };
 }
 
+export interface CoordinatorOptions {
+  /**
+   * Verified mode: the share of range proofs the coordinator checks at the deadline, chosen at random each round (1 by
+   * default). The aggregate check on the commitments runs on every round whatever this is; validators can check every
+   * proof later.
+   */
+  proofSample?: number;
+}
+
 /** Untrusted relay and aggregator. Holds public keys and per-meter report keys, relays messages, and sums. */
 export class Coordinator {
   private readonly registry: ReadonlyMap<MeterId, Uint8Array>;
   private readonly chains: Map<MeterId, Uint8Array>;
   private readonly reportKeys = new Map<MeterId, Uint8Array>();
   private readonly directory = new Map<MeterId, PublicKeys>();
+  private readonly proofSample: number;
   private params?: GroupParams;
   private pending?: Pending;
 
-  constructor(reportSecrets: ReadonlyMap<MeterId, Uint8Array>, registry: ReadonlyMap<MeterId, Uint8Array>) {
+  constructor(reportSecrets: ReadonlyMap<MeterId, Uint8Array>, registry: ReadonlyMap<MeterId, Uint8Array>, options: CoordinatorOptions = {}) {
     this.registry = registry;
     this.chains = new Map([...reportSecrets].map(([id, s]) => [id, Uint8Array.from(s)]));
+    this.proofSample = options.proofSample ?? 1;
   }
 
   startEpoch(params: GroupParams, anchor: EpochAnchor): void {
@@ -703,18 +793,34 @@ export class Coordinator {
     return inbox;
   }
 
-  /** At the deadline: U is every meter with an authentic report for this round; other rounds' reports are dropped. */
-  close(round: number, reports: readonly Report[]): { status: 'open'; active: ReadonlySet<MeterId> } | { status: 'suppressed' } {
+  /**
+   * At the deadline: U is every meter with an authentic report for this round; other rounds' reports are dropped. In
+   * verified mode a report also needs a commitment, and a range proof that checks if it is among those sampled; a
+   * report whose proof fails is left out and named in `rejected`.
+   */
+  close(round: number, reports: readonly Report[]): ({ status: 'open'; active: ReadonlySet<MeterId> } | { status: 'suppressed' }) & { rejected: ReadonlySet<MeterId> } {
     const p = this.current();
     const got = new Map<MeterId, U64>();
+    const pedersen = new Map<MeterId, Uint8Array>();
+    const rejected = new Set<MeterId>();
     for (const r of reports) {
       const key = this.reportKeys.get(r.id);
-      if (r.round !== round || !key || got.has(r.id)) continue;
-      if (equal(r.tag, tag(key, reportMessage(p.epoch, round, r.id, r.y)))) got.set(r.id, r.y);
+      if (r.round !== round || !key || got.has(r.id) || rejected.has(r.id)) continue;
+      if (!equal(r.tag, tag(key, reportMessage(p.epoch, round, r.id, r.y, r.pedersen)))) continue;
+      if (p.rangeBits) {
+        if (!r.pedersen || !r.proof) continue;
+        const sampled = this.proofSample >= 1 || globalThis.crypto.getRandomValues(new Uint32Array(1))[0]! / 2 ** 32 < this.proofSample;
+        if (sampled && !verifyRange(r.pedersen, r.proof, p.rangeBits, proofContext(p.epoch, round, r.id))) {
+          rejected.add(r.id);
+          continue;
+        }
+        pedersen.set(r.id, r.pedersen);
+      }
+      got.set(r.id, r.y);
     }
     const active = new Set(got.keys());
-    this.pending = active.size >= p.minGroupSize ? { round, reports: got, active } : undefined;
-    return this.pending ? { status: 'open', active } : { status: 'suppressed' };
+    this.pending = active.size >= p.minGroupSize ? { round, reports: got, pedersen, active } : undefined;
+    return this.pending ? { status: 'open', active, rejected } : { status: 'suppressed', rejected };
   }
 
   /**
@@ -733,6 +839,8 @@ export class Coordinator {
       const device = this.registry.get(c.id);
       if (!device || !pending.active.has(c.id) || c.round !== pending.round || valid.has(c.id)) continue;
       if (!equal(c.activeHash, activeHash) || c.y !== pending.reports.get(c.id)) continue;
+      const pedersen = pending.pedersen.get(c.id);
+      if (pedersen ? !c.pedersen || !equal(c.pedersen, pedersen) || c.correctionQ === undefined : c.pedersen !== undefined) continue;
       if (verifyBytes(device, cosignMessage(p.epoch, pending.round, activeHash, contributionHash(p.epoch, pending.round, c)), c.signature)) valid.set(c.id, c);
     }
     const dealt = [...valid.values()].filter((c) => c.shares.size >= p.threshold).map((c) => c.id);
@@ -786,9 +894,7 @@ export class Coordinator {
       if (!equal(selfMaskCommitment(p.epoch, round, r.id, r.secret), confirms.get(r.id)!.commitment)) continue;
       secrets.set(r.id, r.secret);
       const removal = r.removal;
-      if (removal && needsRemoval(r.id) && removal.id === r.id && verifyBytes(device, removalMessage(p.epoch, round, r.id, finalHash, removal.value), removal.signature)) {
-        removals.set(r.id, removal);
-      }
+      if (removal && needsRemoval(r.id) && this.validRemoval(removal, r.id, round, finalHash)) removals.set(r.id, removal);
     }
     const missing = { secrets: new Set<MeterId>(), removals: new Set<MeterId>() };
     for (const i of final) {
@@ -852,7 +958,7 @@ export class Coordinator {
       if (shares.length < t) return { status: 'aborted', reason: `escrowed removal of ${i}: ${shares.length}/${t} key shares` };
       try {
         const removal = openEscrow(epoch, round, i, combine(shares, t), escrows!.get(i)!);
-        if (!verifyBytes(this.registry.get(i)!, removalMessage(epoch, round, i, finalHash, removal.value), removal.signature)) throw new Error();
+        if (!this.validRemoval(removal, i, round, finalHash)) throw new Error();
         removals.set(i, removal);
       } catch {
         return { status: 'aborted', reason: `escrowed removal of ${i} does not open to a signed removal` };
@@ -860,28 +966,39 @@ export class Coordinator {
     }
 
     let total: U64 = 0n;
+    let blinding = 0n;
     for (const i of sortedIds(final!)) {
       const c = confirms!.get(i)!;
       total = sub(sub(add(total, c.y), Buffer.from(secrets.get(i)!).readBigUInt64LE(0)), c.correction);
       const removal = removals.get(i);
       if (removal) total = sub(total, removal.value);
+      if (p.rangeBits) blinding = modL(blinding + selfBlinding(secrets.get(i)!) + c.correctionQ! + (removal?.valueQ ?? 0n));
     }
-    return {
-      status: 'published',
-      total: decode(total),
-      evidence: {
-        epoch,
-        round,
-        active: sortedIds(active),
-        final: sortedIds(final!),
-        contributions: sortedIds(confirms!.keys()).map((i) => {
-          const { id, y, correction, commitment, signature } = confirms!.get(i)!;
-          return { id, y, correction, commitment, signature };
-        }),
-        secrets,
-        removals: sortedIds(removals.keys()).map((i) => removals.get(i)!),
-      },
+    // Verified mode: the total must be the sum of the committed readings, whatever any meter put in its masked value.
+    if (p.rangeBits && !sumsTo(sortedIds(final!).map((i) => confirms!.get(i)!.pedersen!), decode(total), blinding)) {
+      return { status: 'aborted', reason: 'the total differs from the sum of the committed readings' };
+    }
+    const evidence: RoundEvidence = {
+      epoch,
+      round,
+      active: sortedIds(active),
+      final: sortedIds(final!),
+      contributions: sortedIds(confirms!.keys()).map((i) => {
+        const { id, y, correction, commitment, pedersen, correctionQ, signature } = confirms!.get(i)!;
+        return pedersen ? { id, y, correction, commitment, pedersen, correctionQ, signature } : { id, y, correction, commitment, signature };
+      }),
+      secrets,
+      removals: sortedIds(removals.keys()).map((i) => removals.get(i)!),
     };
+    if (p.rangeBits) evidence.blinding = blinding;
+    return { status: 'published', total: decode(total), evidence };
+  }
+
+  /** A removal signed by its meter over this round and F, with a blinding part exactly in verified mode. */
+  private validRemoval(r: Removal, id: MeterId, round: number, finalHash: Uint8Array): boolean {
+    const p = this.current();
+    if (r.id !== id || (r.valueQ !== undefined) !== Boolean(p.rangeBits)) return false;
+    return verifyBytes(this.registry.get(id)!, removalMessage(p.epoch, round, id, finalHash, r.value, r.valueQ), r.signature);
   }
 
   private current(): GroupParams {

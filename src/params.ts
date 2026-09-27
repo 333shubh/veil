@@ -24,6 +24,18 @@ export const DESIGN: Design = { corrupt: 0.2, dropout: 0.1, privacyLog2: -40, re
  */
 export const MIN_GROUP_SIZE = 200;
 
+/**
+ * Verified mode's range: 16 bits cover readings from -32,768 to 32,767 W, well beyond what a simulated home draws or
+ * exports; a reading outside it is a lie or a fault.
+ */
+export const VERIFIED_BITS = 16;
+
+/**
+ * Plausibility bounds on a published total, from E9's calibration day of 200 simulated homes at 10-second rounds: the
+ * observed range of the mean load per home widened by a quarter on each side, and twice its largest one-round move.
+ */
+export const PLAUSIBLE = { minPerHome: 44, maxPerHome: 885, maxStepPerHome: 79 };
+
 /** log2 of union bounds over the group. */
 export interface Failure {
   privacy: number; // some honest meter has >= t corrupt neighbours, or partition (below), in one epoch
