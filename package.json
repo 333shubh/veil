@@ -18,7 +18,11 @@
     "e7": "node --experimental-strip-types --disable-warning=ExperimentalWarning experiments/e7.ts",
     "e8": "node --experimental-strip-types --disable-warning=ExperimentalWarning experiments/e8.ts",
     "claims": "node --experimental-strip-types --disable-warning=ExperimentalWarning experiments/claims.ts",
-    "india-dropout": "node --experimental-strip-types --disable-warning=ExperimentalWarning experiments/india-dropout.ts"
+    "india-dropout": "node --experimental-strip-types --disable-warning=ExperimentalWarning experiments/india-dropout.ts",
+    "load-validation": "node --experimental-strip-types --disable-warning=ExperimentalWarning experiments/load-validation.ts",
+    "e5": "node --experimental-strip-types --disable-warning=ExperimentalWarning experiments/e5.ts",
+    "e6": "node --experimental-strip-types --disable-warning=ExperimentalWarning experiments/e6.ts",
+    "indistinguishability": "node --experimental-strip-types --disable-warning=ExperimentalWarning experiments/indistinguishability.ts"
   },
   "devDependencies": {
     "@types/node": "^22.20.4",
