@@ -17,11 +17,15 @@
     "e4": "node --experimental-strip-types --disable-warning=ExperimentalWarning experiments/e4.ts",
     "e7": "node --experimental-strip-types --disable-warning=ExperimentalWarning experiments/e7.ts",
     "e8": "node --experimental-strip-types --disable-warning=ExperimentalWarning experiments/e8.ts",
-    "claims": "node --experimental-strip-types --disable-warning=ExperimentalWarning experiments/claims.ts"
+    "claims": "node --experimental-strip-types --disable-warning=ExperimentalWarning experiments/claims.ts",
+    "india-dropout": "node --experimental-strip-types --disable-warning=ExperimentalWarning experiments/india-dropout.ts"
   },
   "devDependencies": {
     "@types/node": "^22.20.4",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"
+  },
+  "dependencies": {
+    "@noble/post-quantum": "0.7.1"
   }
 }

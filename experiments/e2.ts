@@ -4,7 +4,7 @@ import { hkdf, u32Stream } from '../src/crypto.ts';
 import type { MeterId } from '../src/protocol.ts';
 import { everyone, runRound, setupGroup, type Pattern } from '../src/simulation.ts';
 import { environment, writeResult } from './lib.ts';
-import { BYTES, keysBytes, perMeter, reportBytes, setBytes, type MeterBytes } from './wire.ts';
+import { BYTES, encapsulationBytes, keysBytes, perMeter, reportBytes, setBytes, type MeterBytes } from './wire.ts';
 
 const N = 200;
 const KS = [8, 16, 32, 54, 80];
@@ -62,7 +62,12 @@ for (const k of KS) {
 }
 
 const seconds = ((performance.now() - started) / 1000).toFixed(1);
-const setup = KS.map((k) => ({ k, sent: keysBytes, received: k * keysBytes + N * (BYTES.id + BYTES.key) + (4 + 4 + BYTES.hash + BYTES.signature) }));
+// On average a meter encapsulates to half its neighbours and receives encapsulations from the other half.
+const setup = KS.map((k) => ({
+  k,
+  sent: keysBytes + (k / 2) * encapsulationBytes,
+  received: k * keysBytes + (k / 2) * encapsulationBytes + N * (BYTES.id + BYTES.key) + (4 + 4 + BYTES.hash + BYTES.signature),
+}));
 const localView = (k: number) => BYTES.round + BYTES.hash + 4 + Math.ceil(k / 8);
 const md = [
   '# E2: how many bytes per round?',
@@ -94,8 +99,10 @@ const md = [
   '',
   '## Setup, once per epoch',
   '',
-  `Each meter sends its signed epoch keys (${keysBytes} bytes) and receives its k neighbours' keys, the roster (id and ` +
-    `device key per member, needed to recompute the graph) and the anchor.`,
+  `Each meter sends its signed epoch keys (${keysBytes} bytes, including a 1,184-byte ML-KEM key) and an ML-KEM ` +
+    `encapsulation (${encapsulationBytes} bytes) to each neighbour with a higher id, and receives its k neighbours' keys, ` +
+    'their encapsulations, the roster (id and device key per member, needed to recompute the graph) and the anchor. ' +
+    'Averages over a meter\'s neighbours, half of which have a higher id.',
   '',
   '| k | sent | received (N = 200) |',
   '|---|---|---|',

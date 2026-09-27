@@ -1,5 +1,7 @@
-// Primitives: X25519, HKDF-SHA256, ChaCha20 mask PRG, ChaCha20-Poly1305 for share transport,
-// Ed25519 for device signatures, HMAC-SHA256 for per-round tags, SHA-256 for commitments.
+// Primitives: X25519 with ML-KEM-768 as a hybrid, HKDF-SHA256, ChaCha20 mask PRG, ChaCha20-Poly1305 for share
+// transport, Ed25519 for device signatures, HMAC-SHA256 for per-round tags, SHA-256 for commitments.
+// ML-KEM comes from @noble/post-quantum (pure JavaScript, self-audited): Node 22 has no ML-KEM. The hybrid keeps pair
+// keys safe while either X25519 or ML-KEM holds.
 import {
   createCipheriv,
   createDecipheriv,
@@ -15,6 +17,7 @@ import {
   verify,
   type KeyObject,
 } from 'node:crypto';
+import { ml_kem768 } from '@noble/post-quantum/ml-kem.js';
 import type { U64 } from './ring.ts';
 
 export interface KeyPair {
@@ -43,6 +46,21 @@ export function x25519(own: KeyPair, peer: Uint8Array): Uint8Array {
   if (shared.every((b) => b === 0)) throw new Error('x25519: low-order public key');
   return shared;
 }
+
+export interface KemKeyPair {
+  publicKey: Uint8Array; // 1,184 bytes
+  secretKey: Uint8Array;
+}
+
+export const kemKeygen = (): KemKeyPair => ml_kem768.keygen();
+
+/** A fresh shared secret for the holder of `publicKey`, and the 1,088-byte ciphertext that carries it. */
+export function kemEncapsulate(publicKey: Uint8Array): { ciphertext: Uint8Array; secret: Uint8Array } {
+  const { cipherText, sharedSecret } = ml_kem768.encapsulate(publicKey);
+  return { ciphertext: cipherText, secret: sharedSecret };
+}
+
+export const kemDecapsulate = (ciphertext: Uint8Array, secretKey: Uint8Array): Uint8Array => ml_kem768.decapsulate(ciphertext, secretKey);
 
 export function hkdf(ikm: Uint8Array, info: Uint8Array, length = 32): Uint8Array {
   return new Uint8Array(hkdfSync('sha256', ikm, new Uint8Array(0), info, length));

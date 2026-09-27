@@ -10,7 +10,11 @@ export interface Design {
   roundsPerEpoch: number;
 }
 
-/** Spec bound of 2^-40 on privacy; one-day epochs of 5-second rounds. Rates and the recovery bound are chosen here. */
+/**
+ * Spec bound of 2^-40 on privacy; one-day epochs of 5-second rounds. Dropout 10% is set for Indian households: in CEEW's
+ * smart-meter data from Mathura and Bareilly, a daily epoch's meters miss a round 8.9% and 6.9% of the time on average
+ * (experiments/india-dropout.ts). Power cuts make it bursty; E4 covers the heavier rounds.
+ */
 export const DESIGN: Design = { corrupt: 0.2, dropout: 0.1, privacyLog2: -40, recoveryLog2: -20, roundsPerEpoch: 17_280 };
 
 /** log2 of union bounds over the group. */

@@ -5,7 +5,7 @@ import { choose, DESIGN } from '../src/params.ts';
 import type { MeterId } from '../src/protocol.ts';
 import { everyone, runRound, setupGroup } from '../src/simulation.ts';
 import { environment, ms, timed, writeResult } from './lib.ts';
-import { keysBytes, perMeter } from './wire.ts';
+import { encapsulationBytes, keysBytes, perMeter } from './wire.ts';
 
 const SIZES = [50, 100, 200];
 const ROUNDS = 5;
@@ -14,7 +14,7 @@ interface Cost {
   k: number;
   t: number;
   setupMs: number; // whole group, all meters and the coordinator
-  setupBytes: number; // per meter: its keys out, its neighbours' keys in
+  setupBytes: number; // per meter: its keys out, its neighbours' keys in, ML-KEM encapsulations both ways
   meterMs: number; // per meter per round
   coordinatorMs: number; // per round
   roundBytes: number; // per meter per round, sent plus received
@@ -35,7 +35,7 @@ function cost(n: number, k: number, t: number): Cost {
       roundBytes += (b.sent.report + b.sent.confirm + b.sent.release + b.received.active + b.received.confirms + b.received.final) / n;
     }
   }
-  return { k, t, setupMs, setupBytes: keysBytes * (k + 1), meterMs: meterMs / ROUNDS, coordinatorMs: coordinatorMs / ROUNDS, roundBytes: roundBytes / ROUNDS };
+  return { k, t, setupMs, setupBytes: keysBytes * (k + 1) + k * encapsulationBytes, meterMs: meterMs / ROUNDS, coordinatorMs: coordinatorMs / ROUNDS, roundBytes: roundBytes / ROUNDS };
 }
 
 const started = performance.now();

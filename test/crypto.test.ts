@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hkdf, open, prg, seal, x25519, x25519KeyPair, x25519Keygen } from '../src/crypto.ts';
+import { hkdf, kemDecapsulate, kemEncapsulate, kemKeygen, open, prg, seal, x25519, x25519KeyPair, x25519Keygen } from '../src/crypto.ts';
 
 const hex = (s: string) => Buffer.from(s, 'hex');
 const toHex = (b: Uint8Array) => Buffer.from(b).toString('hex');
@@ -23,6 +23,18 @@ describe('X25519', () => {
     const a = x25519Keygen();
     const b = x25519Keygen();
     expect(toHex(x25519(a, b.pk))).toBe(toHex(x25519(b, a.pk)));
+  });
+});
+
+describe('ML-KEM-768', () => {
+  it('agrees on a secret, and a tampered ciphertext yields a different one', () => {
+    const k = kemKeygen();
+    const { ciphertext, secret } = kemEncapsulate(k.publicKey);
+    expect([k.publicKey.length, ciphertext.length, secret.length]).toEqual([1184, 1088, 32]);
+    expect(toHex(kemDecapsulate(ciphertext, k.secretKey))).toBe(toHex(secret));
+    const bad = Uint8Array.from(ciphertext);
+    bad[0]! ^= 1;
+    expect(toHex(kemDecapsulate(bad, k.secretKey))).not.toBe(toHex(secret));
   });
 });
 
