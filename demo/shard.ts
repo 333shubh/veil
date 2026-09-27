@@ -3,7 +3,7 @@
 // worker (shard-worker.ts) and in a Node thread for the soak run (shard-thread.ts).
 import { Buffer } from 'buffer';
 import type { SigningKey } from '../src/crypto.ts';
-import { Meter, type Confirm, type Encapsulation, type EpochAnchor, type GroupParams, type MeterId, type PublicKeys } from '../src/protocol.ts';
+import { Meter, type Check, type Confirm, type Encapsulation, type EpochAnchor, type GroupParams, type MeterId, type PublicKeys } from '../src/protocol.ts';
 import { Collusion } from './collusion.ts';
 
 export interface Request {
@@ -51,8 +51,10 @@ export function host(): (req: Request) => Response {
     },
     report: (round: number, readings: Map<MeterId, bigint>) => [...readings].map(([id, r]) => meters.get(id)!.report(round, r)),
     confirm: (round: number, active: ReadonlySet<MeterId>, ids: MeterId[]) => ids.map((id) => meters.get(id)!.confirm(round, active)),
-    release: (round: number, final: ReadonlySet<MeterId>, inbox: Map<MeterId, Confirm[]>) =>
-      [...inbox].map(([id, confirms]) => meters.get(id)!.release(round, final, confirms)),
+    check: (round: number, final: ReadonlySet<MeterId>, inbox: Map<MeterId, Confirm[]>) =>
+      [...inbox].map(([id, confirms]) => meters.get(id)!.check(round, final, confirms)),
+    release: (round: number, inbox: Map<MeterId, Check[]>) => [...inbox].map(([id, checks]) => meters.get(id)!.release(round, checks)),
+    unmask: (round: number, requests: Map<MeterId, Set<MeterId>>) => [...requests].map(([id, want]) => meters.get(id)!.unmask(round, want)),
     collusion(corrupt: number, reading: bigint) {
       collusion ??= new Collusion();
       return collusion.attack(corrupt, reading);

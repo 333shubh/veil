@@ -27,7 +27,7 @@ const { k, t } = choose(N, DESIGN)!;
 const group = setupGroup(ids, 1, k, t);
 const toUnit = (v: bigint) => Number(v) / 2 ** 64;
 
-/** What the coordinator can compute per meter: its report with the self-mask, correction and release removed. */
+/** What the coordinator can compute per meter: its report with the self-mask, correction and removal taken off. */
 const masked: number[][] = [];
 const raw: number[][] = [];
 const labels: number[] = [];
@@ -39,14 +39,14 @@ for (let r = 0; r < ROUNDS; r++) {
   const trace = runRound(group, r, readings, { reporting, confirming: reporting, releasing: reporting });
   if (trace.result.status !== 'published') throw new Error(`round ${r} ${trace.result.status}`);
   const ev = trace.result.evidence;
-  const extras = new Map(ev.extras.map((e) => [e.id, e.value]));
+  const removals = new Map(ev.removals.map((e) => [e.id, e.value]));
   const contribution = new Map(ev.contributions.map((c) => [c.id, c]));
   masked.push(
     ids.map((id) => {
       const c = contribution.get(id);
       if (!c) return 0.5;
       const self = Buffer.from(ev.secrets.get(id)!).readBigUInt64LE(0);
-      return toUnit(sub(sub(sub(c.y, self), c.correction), extras.get(id) ?? 0n));
+      return toUnit(sub(sub(sub(c.y, self), c.correction), removals.get(id) ?? 0n));
     }),
   );
   raw.push(ids.map((id) => (reporting.has(id) ? Number(readings.get(id)!) / 10_000 : 0)));
@@ -90,7 +90,7 @@ const md = [
   '',
   `${N} meters, k = ${k}, t = ${t}. Vector B moves ${SHIFT} W from meter 2 to meter 1 of a fixed vector A, so both have ` +
     `the same total. ${ROUNDS} rounds, each A or B at random, with ${DROPOUT * 100}% of meters 3-${N} missing each round. ` +
-    'For every meter the coordinator removes everything it can (the rebuilt self-mask, the correction and any release) ' +
+    'For every meter the coordinator removes everything it can (the revealed or rebuilt self-mask, the correction and any removal) ' +
     'and the classifier sees what is left, one feature per meter. Logistic regression, trained on the first 70% of rounds ' +
     'and tested on the rest; the control trains the same classifier on the raw readings.',
   '',

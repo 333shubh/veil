@@ -12,6 +12,7 @@ import {
   Coordinator,
   isAborted,
   type Aborted,
+  type Check,
   type Confirm,
   type Encapsulation,
   type GroupParams,
@@ -20,6 +21,7 @@ import {
   type Release,
   type Report,
   type RoundEvidence,
+  type Unmask,
 } from '../src/protocol.ts';
 import { hydrate, type Request, type Response } from './shard.ts';
 
@@ -68,7 +70,7 @@ export interface Counters {
   aborted: number;
 }
 
-export type Phase = 'report' | 'close' | 'confirm' | 'collect' | 'release' | 'recover';
+export type Phase = 'report' | 'close' | 'confirm' | 'collect' | 'check' | 'route' | 'release' | 'gather' | 'unmask' | 'recover';
 
 export interface Snapshot {
   round: number;
@@ -182,7 +184,7 @@ export class Engine {
     this.ids.forEach((id, i) => (readings[i] = this.load.power.get(id)![sample]!));
     const reporting = new Set(this.ids.filter((id) => !this.unplugged.has(id) && this.uniform() >= BACKGROUND_DROPOUT));
 
-    const ms = { report: 0, close: 0, confirm: 0, collect: 0, release: 0, recover: 0 };
+    const ms = { report: 0, close: 0, confirm: 0, collect: 0, check: 0, route: 0, release: 0, gather: 0, unmask: 0, recover: 0 };
     let meterMs = 0;
     let clock = performance.now();
     const lap = (phase: Phase) => {
@@ -215,19 +217,41 @@ export class Engine {
       lap('collect');
       if (collected.status !== 'suppressed') {
         const confirmed = new Set(collected.confirmed);
-        const released = await parallel((s) =>
-          s.remote.call<(Release | Aborted)[]>(
-            'release',
+        const checked = await parallel((s) =>
+          s.remote.call<(Check | Aborted)[]>(
+            'check',
             round,
             collected.final,
             new Map(s.ids.filter((id) => confirmed.has(id)).map((id) => [id, collected.inbox.get(id) ?? []])),
           ),
         );
+        const checks: Check[] = [];
+        for (const c of checked) (isAborted(c) ? aborts.push(c.aborted) : checks.push(c));
+        lap('check');
+        const routed = this.coordinator.route(checks);
+        const inFinal = new Set(checks.filter((c) => collected.final.has(c.id)).map((c) => c.id));
+        lap('route');
+        const released = await parallel((s) =>
+          s.remote.call<(Release | Aborted)[]>('release', round, new Map(s.ids.filter((id) => inFinal.has(id)).map((id) => [id, routed.get(id) ?? []]))),
+        );
         const releases: Release[] = [];
         for (const r of released) (isAborted(r) ? aborts.push(r.aborted) : releases.push(r));
         lap('release');
-        result = this.coordinator.recover(releases);
-        lap('recover');
+        const gathered = this.coordinator.gather(releases);
+        lap('gather');
+        if (gathered.status === 'aborted') result = gathered;
+        else {
+          const unmasks: Unmask[] = [];
+          if (gathered.status === 'unmask') {
+            const answered = await parallel((s) =>
+              s.remote.call<(Unmask | Aborted)[]>('unmask', round, new Map(s.ids.filter((id) => gathered.requests.has(id)).map((id) => [id, gathered.requests.get(id)!]))),
+            );
+            for (const u of answered) (isAborted(u) ? aborts.push(u.aborted) : unmasks.push(u));
+          }
+          lap('unmask');
+          result = this.coordinator.recover(unmasks);
+          lap('recover');
+        }
       }
     }
 

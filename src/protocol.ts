@@ -1,6 +1,14 @@
 // Veil protocol core: a double-masked secure sum over a neighbour graph. Everything released to recover a round is
 // specific to that round (self-mask values and pairwise masks, never the epoch seeds or keys behind them), and each
 // meter releases at most one kind of recovery value per neighbour per round.
+//
+// A round: report, then close (the coordinator fixes the active set U), confirm (each meter co-signs U, removes its
+// masks with neighbours outside U and deals shares of its self-mask to neighbours in U), collect (the coordinator fixes
+// the final set F of meters whose self-masks can be rebuilt), check (neighbours tell each other, under their pair keys,
+// which U and F they were shown; a meter in F escrows the removal of its masks with neighbours in U \ F), release (a
+// meter in F whose view at least t of its F neighbours share reveals its own self-mask and removal), and, only for
+// meters in F that went silent, unmask (neighbours release self-mask shares and escrow-key shares) and recover.
+// docs/rounds.md gives the security argument for the check.
 import { randomBytes } from 'node:crypto';
 import {
   equal,
@@ -30,7 +38,7 @@ export type MeterId = number; // nonzero u32; doubles as the meter's Shamir eval
 
 export interface GroupParams {
   epoch: number; // u32
-  threshold: number; // t: shares needed to rebuild a round's self-mask
+  threshold: number; // t: shares needed to rebuild a round's self-mask, and neighbours that must agree on F
   minGroupSize: number; // totals over fewer meters are never published
   graph: ReadonlyMap<MeterId, readonly MeterId[]>; // symmetric neighbour lists N(i)
 }
@@ -82,12 +90,41 @@ export interface Confirm {
   shares: ReadonlyMap<MeterId, Uint8Array>; // per neighbour in U: sealed Shamir share of the self-mask secret
 }
 
+/** The round masks a meter in F shares with its neighbours in U \ F, summed and signed. */
+export interface Removal {
+  id: MeterId;
+  value: U64; // sum of s_ij m_ij(t) over neighbours in U \ F
+  signature: Uint8Array;
+}
+
+/** Sent once F is announced: which U and F this meter was shown, told to each neighbour, and an escrowed removal. */
+export interface Check {
+  id: MeterId;
+  round: number;
+  finalHash: Uint8Array;
+  agree: ReadonlyMap<MeterId, Uint8Array>; // per neighbour in U: MAC over (sender, receiver, U, F) under the pair key
+  escrow?: {
+    sealed: Uint8Array; // the signed removal under a one-round key
+    shares: ReadonlyMap<MeterId, Uint8Array>; // per neighbour in F: sealed Shamir share of that key
+  };
+}
+
+/** Sent by a meter in F once at least t of its F neighbours agree with its view: its own round secret and removal. */
 export interface Release {
   id: MeterId;
   round: number;
   finalHash: Uint8Array;
-  shares: ReadonlyMap<MeterId, bigint>; // neighbours' self-mask shares, for neighbours in F
-  extra?: { value: U64; signature: Uint8Array }; // signed sum of s_ij m_ij(t) over neighbours in U \ F, if any
+  secret: Uint8Array; // this round's self-mask secret
+  removal?: Removal;
+}
+
+/** Sent only when a meter in F went silent: its neighbours' shares of its self-mask secret and escrow key. */
+export interface Unmask {
+  id: MeterId;
+  round: number;
+  finalHash: Uint8Array;
+  shares: ReadonlyMap<MeterId, bigint>; // self-mask shares of the requested neighbours
+  keys: ReadonlyMap<MeterId, bigint>; // escrow-key shares of the requested neighbours that agreed with this meter
 }
 
 export interface Aborted {
@@ -110,8 +147,8 @@ export interface RoundEvidence {
   active: MeterId[];
   final: MeterId[];
   contributions: Contribution[];
-  secrets: ReadonlyMap<MeterId, Uint8Array>; // rebuilt self-mask secrets of F
-  extras: { id: MeterId; value: U64; signature: Uint8Array }[]; // signed releases for neighbours in U \ F
+  secrets: ReadonlyMap<MeterId, Uint8Array>; // self-mask secrets of F, revealed or rebuilt
+  removals: Removal[]; // signed removals of meters in F with neighbours in U \ F
 }
 
 export type RoundResult =
@@ -152,8 +189,8 @@ export const contributionHash = (epoch: number, round: number, c: Omit<Contribut
 export const cosignMessage = (epoch: number, round: number, activeHash: Uint8Array, contribution: Uint8Array) =>
   Buffer.concat([label('cosign'), u32s([epoch, round]), activeHash, contribution]);
 
-export const releaseMessage = (epoch: number, round: number, id: MeterId, finalHash: Uint8Array, extra: U64) =>
-  Buffer.concat([label('release'), u32s([epoch, round, id]), finalHash, le64(extra)]);
+export const removalMessage = (epoch: number, round: number, id: MeterId, finalHash: Uint8Array, value: U64) =>
+  Buffer.concat([label('removal'), u32s([epoch, round, id]), finalHash, le64(value)]);
 
 export const selfMaskCommitment = (epoch: number, round: number, id: MeterId, secret: Uint8Array) =>
   sha256(label('selfmask'), u32s([epoch, round, id]), secret);
@@ -161,7 +198,18 @@ export const selfMaskCommitment = (epoch: number, round: number, id: MeterId, se
 const reportMessage = (epoch: number, round: number, id: MeterId, y: U64) => Buffer.concat([label('report'), u32s([epoch, round, id]), le64(y)]);
 const keysMessage = (k: Omit<PublicKeys, 'signature'>) => Buffer.concat([label('keys'), u32s([k.epoch, k.id]), k.mask, k.channel, k.kem]);
 const encapsulationMessage = (e: Omit<Encapsulation, 'signature'>) => Buffer.concat([label('kem'), u32s([e.epoch, e.from, e.to]), e.ciphertext]);
-const confirmMessage = (epoch: number, round: number, activeHash: Uint8Array) => Buffer.concat([label('confirm'), u32s([epoch, round]), activeHash]);
+// Pair MACs name sender and receiver, so the relay cannot reflect a meter's own MAC back to it as its neighbour's.
+const confirmMessage = (epoch: number, round: number, from: MeterId, to: MeterId, activeHash: Uint8Array) =>
+  Buffer.concat([label('confirm'), u32s([epoch, round, from, to]), activeHash]);
+const agreeMessage = (epoch: number, round: number, from: MeterId, to: MeterId, activeHash: Uint8Array, finalHash: Uint8Array) =>
+  Buffer.concat([label('agree'), u32s([epoch, round, from, to]), activeHash, finalHash]);
+const escrowAad = (epoch: number, round: number, id: MeterId) => Buffer.concat([label('escrow'), u32s([epoch, round, id])]);
+
+/** Open an escrowed removal with its rebuilt key; throws if the key or the ciphertext is wrong. */
+export function openEscrow(epoch: number, round: number, id: MeterId, key: Uint8Array, sealed: Uint8Array): Removal {
+  const plain = open(key, u32s([epoch, round, id]), escrowAad(epoch, round, id), sealed);
+  return { id, value: Buffer.from(plain).readBigUInt64LE(0), signature: Buffer.from(plain.subarray(8)) };
+}
 
 export const anchorMessage = (a: Omit<EpochAnchor, 'signature'>) =>
   Buffer.concat([label('anchor'), u32s([a.epoch, a.k]), a.beacon, u32s(sortedIds(a.roster))]);
@@ -230,19 +278,43 @@ function ratchet(chain: Uint8Array): Uint8Array {
 
 const reportKey = (chain: Uint8Array, epoch: number) => hkdf(chain, Buffer.concat([label('report-key'), u32s([epoch])]));
 
+/**
+ * F is the meters that dealt their self-mask shares, less any with fewer than t neighbours in F (repeated until none
+ * is left): a meter in F must hear agreement from t F neighbours before it releases anything that depends on F.
+ */
+export function finalSet(dealt: Iterable<MeterId>, graph: ReadonlyMap<MeterId, readonly MeterId[]>, t: number): Set<MeterId> {
+  const final = new Set(dealt);
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (const i of final) {
+      if (graph.get(i)!.filter((j) => final.has(j)).length < t) {
+        final.delete(i);
+        changed = true;
+      }
+    }
+  }
+  return final;
+}
+
 interface PairKeys {
   mask: Uint8Array; // k_ij
   share: Uint8Array; // seals the round's self-mask shares
-  confirm: Uint8Array; // MACs the active-set hash
+  escrow: Uint8Array; // seals the round's escrow-key shares
+  confirm: Uint8Array; // MACs the active-set and final-set hashes
 }
 
 interface RoundState {
-  phase: 'reported' | 'confirmed' | 'done';
+  phase: 'reported' | 'confirmed' | 'checked' | 'released' | 'done';
   y: U64;
   active?: ReadonlySet<MeterId>;
   activeHash?: Uint8Array;
   dealt?: boolean; // false: too few active neighbours, so this meter stays out of F but still passes on shares
+  final?: ReadonlySet<MeterId>; // the one F this meter accepts for the round
+  finalHash?: Uint8Array;
+  held: Map<MeterId, bigint>; // neighbours' self-mask shares
+  escrowed: Map<MeterId, bigint>; // escrow-key shares of neighbours that agreed with this meter's view
   masksOut: Set<MeterId>; // neighbours whose round mask this meter has released
+  removal?: Removal;
 }
 
 interface EpochState {
@@ -339,6 +411,7 @@ export class Meter {
       e.pairs.set(j, {
         mask: pairKey('mask', Buffer.concat([x25519(e.maskKeys, peer.mask), kem]), epoch, this.id, j),
         share: pairKey('share', channel, epoch, this.id, j),
+        escrow: pairKey('escrow', channel, epoch, this.id, j),
         confirm: pairKey('confirm', channel, epoch, this.id, j),
       });
     }
@@ -354,7 +427,7 @@ export class Meter {
     if (e.rounds.has(round)) throw new Error(`meter ${this.id} already reported round ${round}`);
     let y = add(encode(reading), prg(e.seed, e.params.epoch, round));
     for (const j of e.neighbours) y = this.signed(y, j, this.mask(j, round));
-    e.rounds.set(round, { phase: 'reported', y, masksOut: new Set() });
+    e.rounds.set(round, { phase: 'reported', y, held: new Map(), escrowed: new Map(), masksOut: new Set() });
     return { id: this.id, round, y, tag: tag(e.reportKey, reportMessage(e.params.epoch, round, this.id, y)) };
   }
 
@@ -386,7 +459,7 @@ export class Meter {
         correction = this.signed(correction, j, this.mask(j, round));
         rs.masksOut.add(j);
       }
-      const secret = keystream(e.seed, epoch, round, 32); // first 8 bytes are this round's self-mask
+      const secret = this.secret(round);
       commitment = selfMaskCommitment(epoch, round, this.id, secret);
       for (const s of split(secret, threshold, live.map(BigInt))) {
         const j = Number(s.x);
@@ -394,7 +467,7 @@ export class Meter {
       }
     }
     const activeHash = setHash('active', epoch, round, active);
-    const tags = new Map(live.map((j) => [j, tag(e.pairs.get(j)!.confirm, confirmMessage(epoch, round, activeHash))]));
+    const tags = new Map(live.map((j) => [j, tag(e.pairs.get(j)!.confirm, confirmMessage(epoch, round, this.id, j, activeHash))]));
     const contribution = { id: this.id, y: rs.y, correction, commitment };
     rs.phase = 'confirmed';
     rs.active = active;
@@ -410,61 +483,139 @@ export class Meter {
   }
 
   /**
-   * On the final set F (meters that dealt their shares): check that every neighbour confirmed the same U, then release
-   * each F neighbour's self-mask share and, if this meter is in F, remove the round masks it shares with neighbours
-   * in U \ F.
+   * On the announced final set F, with the neighbours' confirmations: check that every neighbour confirmed the same U
+   * and keep the self-mask shares they dealt, then fix F as this meter's only view of the round. A meter in F tells
+   * each neighbour in U, under their pair key, which U and F it was shown; if it has neighbours in U \ F, it signs the
+   * removal of the masks it shares with them and escrows it: sealed under a fresh key whose t-of-n shares go to its
+   * F neighbours, who pass them on only if they were shown the same F.
    */
-  release(round: number, final: ReadonlySet<MeterId>, inbox: readonly Confirm[]): Release | Aborted {
+  check(round: number, final: ReadonlySet<MeterId>, inbox: readonly Confirm[]): Check | Aborted {
     const e = this.current();
     const rs = e.rounds.get(round);
-    if (!rs || rs.phase !== 'confirmed') return { aborted: 'not waiting to release' };
-    rs.phase = 'done'; // one release per round, whatever happens next
-    const { epoch, minGroupSize } = e.params;
+    if (!rs || rs.phase !== 'confirmed') return { aborted: 'not waiting for a final set' };
+    rs.phase = 'done'; // until the checks below pass
+    const { epoch, threshold, minGroupSize } = e.params;
     const active = rs.active!;
     if ([...final].some((i) => !active.has(i))) return { aborted: 'final set is not within the active set' };
     if (final.size < minGroupSize) return { aborted: 'final set below the minimum group size' };
-    if (final.has(this.id) && !rs.dealt) return { aborted: 'final set includes this meter, which dealt no shares' };
+    const inFinal = final.has(this.id);
+    if (inFinal && !rs.dealt) return { aborted: 'final set includes this meter, which dealt no shares' };
 
-    const held = new Map<MeterId, bigint>();
-    const expected = confirmMessage(epoch, round, rs.activeHash!);
     for (const c of inbox) {
       const pair = e.pairs.get(c.id);
       const t = c.tags.get(this.id);
       if (!pair || c.round !== round) return { aborted: `unexpected confirmation from ${c.id}` };
-      if (!equal(c.activeHash, rs.activeHash!) || !t || !equal(t, tag(pair.confirm, expected))) {
+      if (!equal(c.activeHash, rs.activeHash!) || !t || !equal(t, tag(pair.confirm, confirmMessage(epoch, round, c.id, this.id, rs.activeHash!)))) {
         return { aborted: `active set differs from neighbour ${c.id}'s` };
       }
       const sealed = c.shares.get(this.id);
       if (!sealed) continue;
       try {
-        held.set(c.id, toBigInt(open(pair.share, u32s([c.id, this.id, round]), label('share'), sealed)));
+        rs.held.set(c.id, toBigInt(open(pair.share, u32s([c.id, this.id, round]), label('share'), sealed)));
       } catch {
         return { aborted: `share from ${c.id} failed authentication` };
       }
     }
 
-    const shares = new Map<MeterId, bigint>();
-    let extra: U64 | undefined;
-    for (const j of e.neighbours) {
-      if (!active.has(j)) continue; // its mask already went out in the correction
-      if (final.has(j)) {
-        if (rs.masksOut.has(j)) return { aborted: `already released the round mask shared with ${j}` };
-        const s = held.get(j);
-        if (s !== undefined) shares.set(j, s);
-      } else if (final.has(this.id)) {
-        extra = this.signed(extra ?? 0n, j, this.mask(j, round));
+    const finalHash = setHash('final', epoch, round, final);
+    const partners = e.neighbours.filter((j) => final.has(j));
+    if (inFinal && partners.length < threshold) return { aborted: `only ${partners.length} neighbours in the final set, need ${threshold}` };
+    rs.final = final;
+    rs.finalHash = finalHash;
+    rs.phase = 'checked';
+    const check: Check = { id: this.id, round, finalHash, agree: new Map() };
+    if (!inFinal) return check;
+
+    check.agree = new Map(
+      e.neighbours.filter((j) => active.has(j)).map((j) => [j, tag(e.pairs.get(j)!.confirm, agreeMessage(epoch, round, this.id, j, rs.activeHash!, finalHash))]),
+    );
+    const covered = e.neighbours.filter((j) => active.has(j) && !final.has(j));
+    if (covered.length > 0) {
+      let value: U64 = 0n;
+      for (const j of covered) {
+        value = this.signed(value, j, this.mask(j, round));
         rs.masksOut.add(j);
       }
+      rs.removal = { id: this.id, value, signature: signBytes(this.device, removalMessage(epoch, round, this.id, finalHash, value)) };
+      const key = randomBytes(32);
+      const shares = new Map<MeterId, Uint8Array>();
+      for (const s of split(key, threshold, partners.map(BigInt))) {
+        const j = Number(s.x);
+        shares.set(j, seal(e.pairs.get(j)!.escrow, u32s([this.id, j, round]), label('escrow-share'), toBytes(s.y, SHARE_BYTES)));
+      }
+      check.escrow = { sealed: seal(key, u32s([epoch, round, this.id]), escrowAad(epoch, round, this.id), Buffer.concat([le64(value), rs.removal.signature])), shares };
+      key.fill(0);
     }
-    const finalHash = setHash('final', epoch, round, final);
-    const release: Release = { id: this.id, round, finalHash, shares };
-    if (extra !== undefined) release.extra = { value: extra, signature: signBytes(this.device, releaseMessage(epoch, round, this.id, finalHash, extra)) };
+    return check;
+  }
+
+  /**
+   * With the F neighbours' checks: if at least t of them were shown the same U and F as this meter, reveal this round's
+   * self-mask secret and removal, and keep the escrow-key shares of the neighbours that agree. Those t neighbours never
+   * remove the masks they share with this meter, so revealing the self-mask exposes nothing that their shares would not.
+   */
+  release(round: number, inbox: readonly Check[]): Release | Aborted {
+    const e = this.current();
+    const rs = e.rounds.get(round);
+    if (!rs || rs.phase !== 'checked' || !rs.final!.has(this.id)) return { aborted: 'not waiting to release' };
+    rs.phase = 'done'; // until agreement is shown
+    const { epoch, threshold } = e.params;
+    const agreeing = new Set<MeterId>();
+    for (const c of inbox) {
+      const pair = e.pairs.get(c.id);
+      if (!pair || c.round !== round) return { aborted: `unexpected check from ${c.id}` };
+      if (!rs.final!.has(c.id)) continue;
+      const mac = c.agree.get(this.id);
+      if (!equal(c.finalHash, rs.finalHash!) || !mac || !equal(mac, tag(pair.confirm, agreeMessage(epoch, round, c.id, this.id, rs.activeHash!, rs.finalHash!)))) {
+        return { aborted: `final set differs from neighbour ${c.id}'s` };
+      }
+      agreeing.add(c.id);
+      const sealed = c.escrow?.shares.get(this.id);
+      if (!sealed) continue;
+      try {
+        rs.escrowed.set(c.id, toBigInt(open(pair.escrow, u32s([c.id, this.id, round]), label('escrow-share'), sealed)));
+      } catch {
+        return { aborted: `escrow share from ${c.id} failed authentication` };
+      }
+    }
+    if (agreeing.size < threshold) return { aborted: `only ${agreeing.size} neighbours agree on the final set, need ${threshold}` };
+    rs.phase = 'released';
+    const release: Release = { id: this.id, round, finalHash: rs.finalHash!, secret: this.secret(round) };
+    if (rs.removal) release.removal = rs.removal;
     return release;
+  }
+
+  /**
+   * For requested neighbours in this meter's F: pass on their self-mask shares, and the escrow-key shares of those that
+   * agreed with this meter's view. Never for a neighbour whose round mask this meter released.
+   */
+  unmask(round: number, want: ReadonlySet<MeterId>): Unmask | Aborted {
+    const e = this.current();
+    const rs = e.rounds.get(round);
+    if (!rs || !(rs.phase === 'released' || (rs.phase === 'checked' && !rs.final!.has(this.id)))) return { aborted: 'not waiting to unmask' };
+    rs.phase = 'done';
+    const shares = new Map<MeterId, bigint>();
+    const keys = new Map<MeterId, bigint>();
+    for (const j of e.neighbours) {
+      if (!want.has(j) || !rs.final!.has(j)) continue;
+      if (rs.masksOut.has(j)) return { aborted: `already released the round mask shared with ${j}` };
+      const s = rs.held.get(j);
+      if (s !== undefined) shares.set(j, s);
+      const k = rs.escrowed.get(j);
+      if (k !== undefined) keys.set(j, k);
+    }
+    return { id: this.id, round, finalHash: rs.finalHash!, shares, keys };
   }
 
   private current(): EpochState {
     if (!this.epoch) throw new Error(`meter ${this.id} has no epoch`);
     return this.epoch;
+  }
+
+  /** The round's self-mask secret; its first 8 bytes are the self-mask. */
+  private secret(round: number): Buffer {
+    const e = this.current();
+    return keystream(e.seed, e.params.epoch, round, 32);
   }
 
   private mask(j: MeterId, round: number): U64 {
@@ -483,7 +634,7 @@ export class Meter {
     const e = this.epoch;
     if (!e) return;
     for (const b of [e.seed, e.maskKeys.sk, e.channelKeys.sk, e.kemKeys.secretKey, e.reportKey, ...e.kemSecrets.values()]) b.fill(0);
-    for (const p of e.pairs.values()) for (const b of [p.mask, p.share, p.confirm]) b.fill(0);
+    for (const p of e.pairs.values()) for (const b of [p.mask, p.share, p.escrow, p.confirm]) b.fill(0);
     this.epoch = undefined;
   }
 }
@@ -494,6 +645,10 @@ interface Pending {
   active: ReadonlySet<MeterId>;
   confirms?: Map<MeterId, Confirm>;
   final?: ReadonlySet<MeterId>;
+  escrows?: Map<MeterId, Uint8Array>; // sealed removals, by meter
+  secrets?: Map<MeterId, Uint8Array>;
+  removals?: Map<MeterId, Removal>;
+  missing?: { secrets: Set<MeterId>; removals: Set<MeterId> };
 }
 
 /** Untrusted relay and aggregator. Holds public keys and per-meter report keys, relays messages, and sums. */
@@ -563,8 +718,8 @@ export class Coordinator {
   }
 
   /**
-   * F is every meter in U whose valid confirmation deals at least t shares. Every valid confirmation is routed to the
-   * sender's neighbours in U, and every confirmed meter is asked to release.
+   * F is finalSet() over the meters in U whose valid confirmation deals at least t shares. Every valid confirmation is
+   * routed to the sender's neighbours in U, and every confirmed meter is asked to check.
    */
   collect(
     confirms: readonly Confirm[],
@@ -580,60 +735,136 @@ export class Coordinator {
       if (!equal(c.activeHash, activeHash) || c.y !== pending.reports.get(c.id)) continue;
       if (verifyBytes(device, cosignMessage(p.epoch, pending.round, activeHash, contributionHash(p.epoch, pending.round, c)), c.signature)) valid.set(c.id, c);
     }
-    const final = new Set([...valid.values()].filter((c) => c.shares.size >= p.threshold).map((c) => c.id));
+    const dealt = [...valid.values()].filter((c) => c.shares.size >= p.threshold).map((c) => c.id);
+    const final = finalSet(dealt, p.graph, p.threshold);
     if (final.size < p.minGroupSize) {
       this.pending = undefined;
       return { status: 'suppressed' };
     }
     const inbox = new Map<MeterId, Confirm[]>();
-    for (const c of valid.values()) for (const j of p.graph.get(c.id)!) if (pending.active.has(j)) push(inbox, j, c);
+    for (const c of valid.values()) for (const j of p.graph.get(c.id)!) if (valid.has(j)) push(inbox, j, c);
     pending.confirms = valid;
     pending.final = final;
     return { status: 'open', final, confirmed: new Set(valid.keys()), inbox };
   }
 
-  /**
-   * sum_{i in F} x_i = sum_{i in F} (y_i - v_i(t) - c_i - e_i)   (mod 2^64)
-   * v_i(t): the round's self-mask, rebuilt from t shares and checked against i's commitment; c_i: i's correction for
-   * neighbours outside U; e_i: i's signed release for neighbours in U \ F (none if it has none). Masks between members
-   * of F cancel.
-   */
-  recover(releases: readonly Release[]): RoundResult {
+  /** Keep each escrowed removal and route every check to the sender's neighbours in F, who are asked to release. */
+  route(checks: readonly Check[]): Map<MeterId, Check[]> {
     const p = this.current();
     const pending = this.pending;
     if (!pending?.final || !pending.confirms) throw new Error('no final set');
-    this.pending = undefined;
-    const { epoch, threshold: t, graph } = p;
-    const { round, active, final, confirms } = pending;
-    const finalHash = setHash('final', epoch, round, final);
+    const finalHash = setHash('final', p.epoch, pending.round, pending.final);
+    const escrows = new Map<MeterId, Uint8Array>();
+    const inbox = new Map<MeterId, Check[]>();
+    const seen = new Set<MeterId>();
+    for (const c of checks) {
+      if (!pending.confirms.has(c.id) || c.round !== pending.round || seen.has(c.id) || !equal(c.finalHash, finalHash)) continue;
+      seen.add(c.id);
+      if (c.escrow && pending.final.has(c.id)) escrows.set(c.id, c.escrow.sealed);
+      for (const j of p.graph.get(c.id)!) if (pending.final.has(j)) push(inbox, j, c);
+    }
+    pending.escrows = escrows;
+    return inbox;
+  }
 
-    const byId = new Map<MeterId, Release>();
-    const seedShares = new Map<MeterId, Share[]>();
+  /**
+   * Take the releases. A meter in F that revealed a secret matching its commitment, and a signed removal if it has
+   * neighbours in U \ F, needs nothing more; for the others, returns which neighbours to ask for shares.
+   */
+  gather(releases: readonly Release[]): { status: 'complete' } | { status: 'unmask'; requests: Map<MeterId, Set<MeterId>> } | { status: 'aborted'; reason: string } {
+    const p = this.current();
+    const pending = this.pending;
+    if (!pending?.final || !pending.confirms || !pending.escrows) throw new Error('no routed checks');
+    const { round, active, final, confirms, escrows } = pending;
+    const finalHash = setHash('final', p.epoch, round, final);
+    const needsRemoval = (i: MeterId) => p.graph.get(i)!.some((j) => active.has(j) && !final.has(j));
+    const secrets = new Map<MeterId, Uint8Array>();
+    const removals = new Map<MeterId, Removal>();
     for (const r of releases) {
       const device = this.registry.get(r.id);
-      if (!confirms.has(r.id) || r.round !== round || byId.has(r.id) || !device || !equal(r.finalHash, finalHash)) continue;
-      if (r.extra && !verifyBytes(device, releaseMessage(epoch, round, r.id, finalHash, r.extra.value), r.extra.signature)) continue;
-      byId.set(r.id, r);
-      for (const [i, y] of r.shares) if (final.has(i) && graph.get(i)!.includes(r.id)) push(seedShares, i, { x: BigInt(r.id), y });
+      if (!final.has(r.id) || r.round !== round || secrets.has(r.id) || !device || !equal(r.finalHash, finalHash)) continue;
+      if (!equal(selfMaskCommitment(p.epoch, round, r.id, r.secret), confirms.get(r.id)!.commitment)) continue;
+      secrets.set(r.id, r.secret);
+      const removal = r.removal;
+      if (removal && needsRemoval(r.id) && removal.id === r.id && verifyBytes(device, removalMessage(p.epoch, round, r.id, finalHash, removal.value), removal.signature)) {
+        removals.set(r.id, removal);
+      }
     }
+    const missing = { secrets: new Set<MeterId>(), removals: new Set<MeterId>() };
+    for (const i of final) {
+      if (!secrets.has(i)) missing.secrets.add(i);
+      if (needsRemoval(i) && !removals.has(i)) {
+        if (!escrows.has(i)) {
+          this.pending = undefined;
+          return { status: 'aborted', reason: `meter ${i} left no removal of its masks with meters that dropped after reporting` };
+        }
+        missing.removals.add(i);
+      }
+    }
+    Object.assign(pending, { secrets, removals, missing });
+    if (missing.secrets.size === 0 && missing.removals.size === 0) return { status: 'complete' };
+    const requests = new Map<MeterId, Set<MeterId>>();
+    for (const i of new Set([...missing.secrets, ...missing.removals])) {
+      for (const j of p.graph.get(i)!) {
+        if (!confirms.has(j)) continue;
+        if (!requests.has(j)) requests.set(j, new Set());
+        requests.get(j)!.add(i);
+      }
+    }
+    return { status: 'unmask', requests };
+  }
 
-    const secrets = new Map<MeterId, Uint8Array>();
-    let total: U64 = 0n;
-    for (const i of sortedIds(final)) {
-      const c = confirms.get(i)!;
+  /**
+   * sum_{i in F} x_i = sum_{i in F} (y_i - v_i(t) - c_i - e_i)   (mod 2^64)
+   * v_i(t): the round's self-mask, revealed by i or rebuilt from t shares, checked against i's commitment; c_i: i's
+   * correction for neighbours outside U; e_i: i's signed removal for neighbours in U \ F, revealed by i or opened with
+   * its escrow key rebuilt from t shares (none if it has none). Masks between members of F cancel.
+   */
+  recover(unmasks: readonly Unmask[] = []): RoundResult {
+    const p = this.current();
+    const pending = this.pending;
+    if (!pending?.secrets || !pending.removals || !pending.missing) throw new Error('no gathered releases');
+    this.pending = undefined;
+    const { epoch, threshold: t, graph } = p;
+    const { round, active, final, confirms, escrows, secrets, removals, missing } = pending;
+    const finalHash = setHash('final', epoch, round, final!);
+
+    const seedShares = new Map<MeterId, Share[]>();
+    const keyShares = new Map<MeterId, Share[]>();
+    const seen = new Set<MeterId>();
+    for (const u of unmasks) {
+      if (!confirms!.has(u.id) || u.round !== round || seen.has(u.id) || !equal(u.finalHash, finalHash)) continue;
+      seen.add(u.id);
+      for (const [i, y] of u.shares) if (missing.secrets.has(i) && graph.get(i)!.includes(u.id)) push(seedShares, i, { x: BigInt(u.id), y });
+      for (const [i, y] of u.keys) if (missing.removals.has(i) && graph.get(i)!.includes(u.id)) push(keyShares, i, { x: BigInt(u.id), y });
+    }
+    for (const i of sortedIds(missing.secrets)) {
       const shares = seedShares.get(i) ?? [];
       if (shares.length < t) return { status: 'aborted', reason: `self-mask of ${i}: ${shares.length}/${t} shares` };
       const secret = Buffer.from(combine(shares, t));
-      if (!equal(selfMaskCommitment(epoch, round, i, secret), c.commitment)) {
+      if (!equal(selfMaskCommitment(epoch, round, i, secret), confirms!.get(i)!.commitment)) {
         return { status: 'aborted', reason: `shares of ${i} do not match its commitment` };
       }
       secrets.set(i, secret);
-      total = sub(sub(add(total, c.y), secret.readBigUInt64LE(0)), c.correction);
-      if (graph.get(i)!.some((j) => active.has(j) && !final.has(j))) {
-        const extra = byId.get(i)?.extra;
-        if (!extra) return { status: 'aborted', reason: `meter ${i} did not remove its masks with meters that dropped after reporting` };
-        total = sub(total, extra.value);
+    }
+    for (const i of sortedIds(missing.removals)) {
+      const shares = keyShares.get(i) ?? [];
+      if (shares.length < t) return { status: 'aborted', reason: `escrowed removal of ${i}: ${shares.length}/${t} key shares` };
+      try {
+        const removal = openEscrow(epoch, round, i, combine(shares, t), escrows!.get(i)!);
+        if (!verifyBytes(this.registry.get(i)!, removalMessage(epoch, round, i, finalHash, removal.value), removal.signature)) throw new Error();
+        removals.set(i, removal);
+      } catch {
+        return { status: 'aborted', reason: `escrowed removal of ${i} does not open to a signed removal` };
       }
+    }
+
+    let total: U64 = 0n;
+    for (const i of sortedIds(final!)) {
+      const c = confirms!.get(i)!;
+      total = sub(sub(add(total, c.y), Buffer.from(secrets.get(i)!).readBigUInt64LE(0)), c.correction);
+      const removal = removals.get(i);
+      if (removal) total = sub(total, removal.value);
     }
     return {
       status: 'published',
@@ -642,13 +873,13 @@ export class Coordinator {
         epoch,
         round,
         active: sortedIds(active),
-        final: sortedIds(final),
-        contributions: sortedIds(confirms.keys()).map((i) => {
-          const { id, y, correction, commitment, signature } = confirms.get(i)!;
+        final: sortedIds(final!),
+        contributions: sortedIds(confirms!.keys()).map((i) => {
+          const { id, y, correction, commitment, signature } = confirms!.get(i)!;
           return { id, y, correction, commitment, signature };
         }),
         secrets,
-        extras: [...byId.values()].flatMap(({ id, extra }) => (extra ? [{ id, ...extra }] : [])),
+        removals: sortedIds(removals.keys()).map((i) => removals.get(i)!),
       },
     };
   }

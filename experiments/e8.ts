@@ -3,7 +3,7 @@
 // Run: npm run e8   (writes experiments/results/e8.md and e8.json)
 import { choose, DESIGN } from '../src/params.ts';
 import type { MeterId } from '../src/protocol.ts';
-import { everyone, runRound, setupGroup } from '../src/simulation.ts';
+import { coordinatorMs as coordinatorTime, everyone, meterMs as meterTime, runRound, setupGroup } from '../src/simulation.ts';
 import { environment, ms, timed, writeResult } from './lib.ts';
 import { encapsulationBytes, keysBytes, perMeter } from './wire.ts';
 
@@ -29,10 +29,10 @@ function cost(n: number, k: number, t: number): Cost {
   for (let r = 0; r < ROUNDS; r++) {
     const trace = runRound(g, r, new Map(ids.map((id) => [id, 1000n])), everyone(ids));
     if (trace.result.status !== 'published') throw new Error(`round ${r} ${trace.result.status}`);
-    meterMs += (trace.ms.report + trace.ms.confirm + trace.ms.release) / n;
-    coordinatorMs += trace.ms.close + trace.ms.collect + trace.ms.recover;
-    for (const b of perMeter(trace).values()) {
-      roundBytes += (b.sent.report + b.sent.confirm + b.sent.release + b.received.active + b.received.confirms + b.received.final) / n;
+    meterMs += meterTime(trace) / n;
+    coordinatorMs += coordinatorTime(trace);
+    for (const b of perMeter(trace, n).values()) {
+      roundBytes += (Object.values(b.sent).reduce((a, x) => a + x, 0) + Object.values(b.received).reduce((a, x) => a + x, 0)) / n;
     }
   }
   return { k, t, setupMs, setupBytes: keysBytes * (k + 1) + k * encapsulationBytes, meterMs: meterMs / ROUNDS, coordinatorMs: coordinatorMs / ROUNDS, roundBytes: roundBytes / ROUNDS };
@@ -63,7 +63,7 @@ const md = [
   '',
   `Same protocol, same machine; the complete graph uses k = N - 1 and t = floor((N - 1)/2) + 1. Setup time covers the ` +
     `whole group (keys, signatures, key exchange); round figures average ${ROUNDS} rounds with no dropouts. Bytes per ` +
-    'meter per round include the active and final set announcements, which are the same for both.',
+    'meter per round include the active and final set announcements (roster bitmaps), which are the same for both.',
   '',
   '| N | graph | k | t | setup (ms, group) | setup bytes per meter | per meter per round (ms) | coordinator per round (ms) | bytes per meter per round |',
   '|---|---|---|---|---|---|---|---|---|',
