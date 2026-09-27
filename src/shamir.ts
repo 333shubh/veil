@@ -10,7 +10,14 @@ export interface Share {
   y: bigint;
 }
 
-const mod = (a: bigint): bigint => ((a % P) + P) % P;
+const mod = (a: bigint): bigint => {
+  const r = a % P;
+  return r < 0n ? r + P : r;
+};
+
+/** Points below 2^32 (meter ids) let several small factors multiply before one reduction mod P. */
+const SMALL = 1n << 32n;
+const CHUNK = 7; // 7 factors below 2^33 stay below 2^231
 
 function inverse(a: bigint): bigint {
   let [r0, r1, s0, s1] = [mod(a), P, 1n, 0n];
@@ -53,26 +60,64 @@ export function split(secret: Uint8Array, t: number, xs: readonly bigint[]): Sha
   checkPoints(xs);
   const coeffs = [toBigInt(secret)];
   for (let i = 1; i < t; i++) coeffs.push(randomElement());
-  return xs.map((x) => ({ x, y: coeffs.reduceRight((acc, c) => (acc * x + c) % P, 0n) }));
+  // Horner's rule; with a small point, each step adds about 32 bits, so reducing every fourth step is enough.
+  const every = xs.every((x) => x < SMALL) ? 4 : 1;
+  return xs.map((x) => {
+    let acc = 0n;
+    for (let i = coeffs.length - 1, n = 1; i >= 0; i--, n++) {
+      acc = acc * x + coeffs[i]!;
+      if (n % every === 0) acc %= P;
+    }
+    return { x, y: acc % P };
+  });
 }
 
-/** Lagrange interpolation at 0 over the first t shares, kept as one fraction so it costs one inversion. */
+/** Product mod P of factors that may be negative; small factors are multiplied in chunks before each reduction. */
+function product(factors: readonly bigint[], small: boolean): bigint {
+  let acc = 1n;
+  let chunk = 1n;
+  for (let i = 0; i < factors.length; i++) {
+    chunk *= factors[i]!;
+    if (!small || (i + 1) % CHUNK === 0) {
+      acc = mod(acc * chunk);
+      chunk = 1n;
+    }
+  }
+  return mod(acc * chunk);
+}
+
+/** Inverses of every element with one field inversion (Montgomery's trick). */
+function inverses(values: readonly bigint[]): bigint[] {
+  const prefix: bigint[] = [];
+  let acc = 1n;
+  for (const v of values) {
+    prefix.push(acc);
+    acc = (acc * v) % P;
+  }
+  let inv = inverse(acc);
+  const out = Array<bigint>(values.length);
+  for (let i = values.length - 1; i >= 0; i--) {
+    out[i] = (inv * prefix[i]!) % P;
+    inv = (inv * values[i]!) % P;
+  }
+  return out;
+}
+
+/**
+ * Lagrange interpolation at 0 over the first t shares:
+ *   secret = sum_j y_j prod_{m != j} x_m / (x_m - x_j) = (prod_m x_m) sum_j y_j / (x_j prod_{m != j} (x_m - x_j)).
+ * The denominators are products of small integers when the points are meter ids, and one batched inversion covers
+ * all t of them.
+ */
 export function combine(shares: readonly Share[], t: number): Uint8Array {
   if (shares.length < t) throw new RangeError(`need ${t} shares, have ${shares.length}`);
   const use = shares.slice(0, t);
-  checkPoints(use.map((s) => s.x));
-  let num = 0n; // secret = num / den
-  let den = 1n;
-  for (const [j, sj] of use.entries()) {
-    let n = sj.y;
-    let d = 1n;
-    for (const [m, sm] of use.entries()) {
-      if (m === j) continue;
-      n = (n * sm.x) % P;
-      d = mod(d * (sm.x - sj.x));
-    }
-    num = (num * d + n * den) % P;
-    den = (den * d) % P;
-  }
-  return toBytes((num * inverse(den)) % P, 32);
+  const xs = use.map((s) => s.x);
+  checkPoints(xs);
+  const small = xs.every((x) => x < SMALL);
+  const dens = xs.map((xj, j) => product([xj, ...xs.filter((_, m) => m !== j).map((xm) => xm - xj)], small));
+  const inv = inverses(dens);
+  let sum = 0n;
+  for (let j = 0; j < t; j++) sum = (sum + use[j]!.y * inv[j]!) % P;
+  return toBytes((product(xs, small) * sum) % P, 32);
 }

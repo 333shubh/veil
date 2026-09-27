@@ -43,6 +43,18 @@ describe('Shamir over GF(2^256 + 297)', () => {
     }
   });
 
+  it('rebuilds with points across the whole field, not only meter ids', () => {
+    const rng = new Rng(2);
+    for (let trial = 0; trial < 50; trial++) {
+      const t = rng.int(1, 12);
+      const secret = randomBytes(32);
+      const points = new Set<bigint>([P - 1n, 1n << 32n]);
+      while (points.size < t + 2) points.add(rng.big(1n, P - 1n));
+      const shares = rng.shuffle(split(secret, t, [...points]));
+      expect(Buffer.from(combine(shares, t)).equals(secret)).toBe(true);
+    }
+  });
+
   it('rejects bad thresholds and points', () => {
     const s = randomBytes(32);
     expect(() => split(s, 0, [1n, 2n])).toThrow(RangeError);
