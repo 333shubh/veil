@@ -1,0 +1,63 @@
+{
+  "environment": "13th Gen Intel(R) Core(TM) i5-13450HX (16 threads), win32 10.0.26200, Node v22.10.0, OpenSSL 3.0.15+quic",
+  "seconds": 23.7,
+  "data": "doi:10.7910/DVN/GOCHJH",
+  "results": [
+    {
+      "district": "mathura_2020",
+      "meters": 38,
+      "transient": {
+        "mean": 0.0059662480682596344,
+        "p90": 0.010655737704918032
+      },
+      "epochs": [
+        {
+          "label": "daily",
+          "epochs": 352,
+          "rounds": 168490,
+          "mean": 0.08875356353029935,
+          "median": 0.050000000000000044,
+          "p90": 0.25,
+          "p99": 0.4782608695652174
+        },
+        {
+          "label": "hourly",
+          "epochs": 8421,
+          "rounds": 159984,
+          "mean": 0.038713293685382566,
+          "median": 0,
+          "p90": 0.1333333333333333,
+          "p99": 0.3157894736842105
+        }
+      ]
+    },
+    {
+      "district": "bareilly_2020",
+      "meters": 45,
+      "transient": {
+        "mean": 0.008710177079217445,
+        "p90": 0.01605191256830601
+      },
+      "epochs": [
+        {
+          "label": "daily",
+          "epochs": 360,
+          "rounds": 172373,
+          "mean": 0.06932678400943793,
+          "median": 0,
+          "p90": 0.24390243902439024,
+          "p99": 0.4285714285714286
+        },
+        {
+          "label": "hourly",
+          "epochs": 8630,
+          "rounds": 163944,
+          "mean": 0.03519325577445096,
+          "median": 0,
+          "p90": 0.125,
+          "p99": 0.3157894736842105
+        }
+      ]
+    }
+  ]
+}
