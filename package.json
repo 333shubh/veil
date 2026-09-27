@@ -22,14 +22,24 @@
     "load-validation": "node --experimental-strip-types --disable-warning=ExperimentalWarning experiments/load-validation.ts",
     "e5": "node --experimental-strip-types --disable-warning=ExperimentalWarning experiments/e5.ts",
     "e6": "node --experimental-strip-types --disable-warning=ExperimentalWarning experiments/e6.ts",
-    "indistinguishability": "node --experimental-strip-types --disable-warning=ExperimentalWarning experiments/indistinguishability.ts"
+    "indistinguishability": "node --experimental-strip-types --disable-warning=ExperimentalWarning experiments/indistinguishability.ts",
+    "demo": "node --experimental-strip-types --disable-warning=ExperimentalWarning demo/build.ts --serve",
+    "demo:build": "node --experimental-strip-types --disable-warning=ExperimentalWarning demo/build.ts",
+    "demo:soak": "npm run demo:build && node demo/dist/soak.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.20.4",
+    "@types/three": "0.186.0",
+    "buffer": "6.0.3",
+    "esbuild": "0.28.2",
+    "three": "0.186.1",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"
   },
   "dependencies": {
+    "@noble/ciphers": "2.4.0",
+    "@noble/curves": "2.4.0",
+    "@noble/hashes": "2.4.0",
     "@noble/post-quantum": "0.7.1"
   }
 }
