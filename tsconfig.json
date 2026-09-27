@@ -10,7 +10,9 @@
     "erasableSyntaxOnly": true,
     "allowImportingTsExtensions": true,
     "skipLibCheck": true,
+    "resolveJsonModule": true,
     "types": ["node"]
   },
-  "include": ["src", "test", "experiments"]
+  "include": ["src", "test", "experiments", "demo"],
+  "exclude": ["demo/dist"]
 }

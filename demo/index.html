@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Veil demo</title>
+<style>
+  :root {
+    --bg: #0b1020; --panel: #111830; --card: #161f3b; --line: #26314f; --text: #e6e9f2; --muted: #93a0bd;
+    --accent: #7dd3fc; --good: #4ade80; --bad: #f87171; --warn: #fbbf24;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--text); background: var(--bg);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; display: grid; grid-template-columns: 1fr 400px; overflow: hidden; background: var(--bg); }
+  #stage { position: relative; min-width: 0; }
+  #stage canvas { display: block; width: 100%; height: 100%; }
+  #panel { background: var(--panel); border-left: 1px solid var(--line); overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  h1 { font-size: 20px; margin: 0; letter-spacing: .02em; }
+  h1 span { color: var(--muted); font-weight: 400; font-size: 13px; margin-left: 6px; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  .muted { color: var(--muted); font-size: 12.5px; line-height: 1.45; }
+  .big { font-size: 30px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; background: var(--bg); padding: 4px; border-radius: 10px; }
+  .tabs button { background: transparent; color: var(--muted); border: 0; border-radius: 7px; padding: 7px 0; font: inherit; font-size: 13px; cursor: pointer; }
+  .tabs button.on { background: var(--card); color: var(--text); box-shadow: 0 0 0 1px var(--line); }
+  button.action { background: #1d2a52; color: var(--text); border: 1px solid #34467a; border-radius: 8px; padding: 7px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+  button.action:hover { background: #26366a; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 13px; }
+  td { padding: 2px 0; } td:last-child { text-align: right; }
+  .ok { color: var(--good); } .fail { color: var(--bad); } .warn { color: var(--warn); }
+  .mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12px; }
+  #masked { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px; margin: 6px 0; color: #c4b5fd; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  canvas.chart { width: 100%; height: 120px; display: block; }
+  #spark { height: 54px; }
+  #overlay { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(11,16,32,.82); z-index: 2; }
+  #overlay .card { max-width: 440px; }
+  #tip { position: absolute; pointer-events: none; background: rgba(17,24,48,.95); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font-size: 12px; display: none; z-index: 1; }
+  #legend { position: absolute; left: 12px; bottom: 12px; font-size: 12px; color: var(--muted); background: rgba(17,24,48,.8); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; display: flex; gap: 12px; flex-wrap: wrap; max-width: calc(100% - 24px); }
+  #legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+  #closing { text-align: center; font-size: 15px; font-style: italic; color: var(--accent); padding: 6px 0 2px; }
+  .hidden { display: none !important; }
+  label.check { display: flex; gap: 8px; align-items: center; font-size: 13px; cursor: pointer; }
+  @media (max-width: 860px) {
+    body { grid-template-columns: 1fr; grid-template-rows: 55vh 1fr; overflow: auto; height: auto; }
+    #stage { height: 55vh; }
+    #panel { border-left: 0; border-top: 1px solid var(--line); overflow: visible; padding: 16px; }
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="overlay"><div class="card"><h2>Epoch setup</h2><div id="progress" class="muted">Starting meters…</div><div id="elapsed" class="muted" style="margin-top:8px"></div>
+    <p class="muted">Every meter draws fresh X25519 and ML-KEM-768 keys, checks its neighbours' signed keys and derives a pair key with each. A deployment does this once per day; here all meters share this computer.</p></div></div>
+  <div id="tip"></div>
+  <div id="legend"></div>
+</div>
+<aside id="panel">
+  <div><h1>Veil<span>private totals for a feeder of Indian homes</span></h1></div>
+
+  <div class="tabs" id="tabs">
+    <button data-mode="raw">Raw</button><button data-mode="veil" class="on">Veil</button><button data-mode="operator">Operator</button><button data-mode="audit">Audit</button>
+  </div>
+  <div class="muted" id="modeText"></div>
+
+  <div class="card">
+    <div class="row"><h2>Transformer total</h2><span class="muted" id="clock"></span></div>
+    <div class="row"><span class="big" id="total">—</span><span class="muted" id="included"></span></div>
+    <canvas class="chart" id="spark"></canvas>
+    <div class="muted" id="status"></div>
+  </div>
+
+  <div class="card">
+    <h2>Invariant check</h2>
+    <div id="invariant" class="muted"></div>
+    <table id="counters"></table>
+  </div>
+
+  <div class="card" id="operatorCard">
+    <h2>Operator view</h2>
+    <div class="muted">Masked reports as the coordinator receives them (first 14 of <span id="maskedCount">0</span>):</div>
+    <div id="masked" class="mono"></div>
+    <div class="muted">Summed and unmasked after recovery: <b id="decoded" style="color:var(--text)">—</b></div>
+  </div>
+
+  <div class="card">
+    <h2>Unplug a meter</h2>
+    <div class="muted">Click a house to unplug it or plug it back in. The round goes on without it: its neighbours release what cancels its masks, and the total covers the homes that reported.</div>
+    <table id="recovery" style="margin-top:6px"></table>
+  </div>
+
+  <div class="card">
+    <h2>Collusion</h2>
+    <div class="muted">A separate group of 16 homes (k = 6, t = 4). The coordinator corrupts some of a target's 6 neighbours and runs the survivor-set attack over every split of the rest.</div>
+    <input type="range" id="collude" min="0" max="6" value="0">
+    <div class="row"><span id="colludeLabel">0 of 6 neighbours corrupt</span><span id="colludeResult" class="muted"></span></div>
+  </div>
+
+  <div class="card">
+    <h2>Group size</h2>
+    <div class="muted">Experiment E5: detecting one home's water pump switching on, from the total of a group of this size.</div>
+    <input type="range" id="size" min="0" max="10" value="8">
+    <canvas class="chart" id="sizeChart"></canvas>
+    <div class="muted" id="sizeText"></div>
+  </div>
+
+  <div class="card">
+    <label class="check"><input type="checkbox" id="billingOn"> <h2 style="margin:0">Billing channel</h2></label>
+    <div id="billingBox" class="hidden">
+      <div class="muted">A separate, coarse stream: one home's energy per 30 minutes, as the billing register records it. Shift-click a house to pick it.</div>
+      <canvas class="chart" id="billChart"></canvas>
+    </div>
+  </div>
+
+  <div class="card" id="auditCard">
+    <h2>Audit</h2>
+    <div class="muted">Record the latest total on the ledger, then have the operator publish a second, altered total for the same round.</div>
+    <div style="margin:8px 0"><button class="action" id="tamper">Tamper: republish latest total +1,000 W</button></div>
+    <div id="auditOut" class="muted"></div>
+  </div>
+
+  <div class="row"><button class="action" id="pause">Pause</button><span class="muted" id="engineInfo"></span></div>
+  <div id="closing">The grid doesn't have to watch you to power you.</div>
+</aside>
+<script type="module" src="main.js"></script>
+</body>
+</html>

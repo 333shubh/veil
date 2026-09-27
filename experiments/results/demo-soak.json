@@ -1,0 +1,88 @@
+{
+  "environment": "13th Gen Intel(R) Core(TM) i5-13450HX (16 threads), win32 10.0.26200, Node v22.10.0, OpenSSL 3.0.15+quic",
+  "homes": 240,
+  "threads": 8,
+  "setupPhasesMs": {
+    "devices": 364.3444,
+    "anchor": 67.46679999999998,
+    "keys": 1492.1424,
+    "keyExchange": 11396.4318,
+    "finishKeys": 20996.174
+  },
+  "k": 54,
+  "t": 33,
+  "seconds": 641.9147612999999,
+  "setupMs": 34324.585900000005,
+  "counters": {
+    "rounds": 307,
+    "published": 307,
+    "exact": 307,
+    "mismatches": 0,
+    "suppressed": 0,
+    "aborted": 0
+  },
+  "roundMs": {
+    "n": 306,
+    "median": 1917.753000000026,
+    "p95": 2151.376799999969,
+    "mean": 1909.4111225490194,
+    "max": 2379.041900000011
+  },
+  "tampers": 6,
+  "tampersCaught": 6,
+  "collusion": [
+    {
+      "corrupt": 0,
+      "t": 4,
+      "splits": 64,
+      "exposed": false,
+      "truth": "2345"
+    },
+    {
+      "corrupt": 1,
+      "t": 4,
+      "splits": 32,
+      "exposed": false,
+      "truth": "2345"
+    },
+    {
+      "corrupt": 2,
+      "t": 4,
+      "splits": 16,
+      "exposed": false,
+      "truth": "2345"
+    },
+    {
+      "corrupt": 3,
+      "t": 4,
+      "splits": 8,
+      "exposed": false,
+      "truth": "2345"
+    },
+    {
+      "corrupt": 4,
+      "t": 4,
+      "splits": 4,
+      "exposed": true,
+      "guess": "2345",
+      "truth": "2345"
+    },
+    {
+      "corrupt": 5,
+      "t": 4,
+      "splits": 2,
+      "exposed": true,
+      "guess": "2345",
+      "truth": "2345"
+    },
+    {
+      "corrupt": 6,
+      "t": 4,
+      "splits": 1,
+      "exposed": true,
+      "guess": "2345",
+      "truth": "2345"
+    }
+  ],
+  "pass": true
+}
