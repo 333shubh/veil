@@ -143,6 +143,16 @@ export function strongestThreshold(n: number, k: number, d: Design): number | un
   return undefined;
 }
 
+/**
+ * Smallest t > k/2 whose privacy meets the bound, or undefined if none does. A meter in F needs t of its F neighbours
+ * to agree before it releases anything, so the smallest safe t tolerates the most dropout for a given k.
+ */
+export function privacyThreshold(n: number, k: number, d: Design): number | undefined {
+  const m = model(n, k, d);
+  for (let t = Math.floor(k / 2) + 1; t <= k; t++) if (bounds(m, t, d).privacy <= d.privacyLog2) return t;
+  return undefined;
+}
+
 /** Smallest k (up to MAX_K) meeting both bounds with some t > k/2, or undefined if none does. */
 export function choose(n: number, d: Design): Choice | undefined {
   for (const k of neighbourhoodSizes(n)) {

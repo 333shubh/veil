@@ -6,7 +6,7 @@ import {
   anchorMessage,
   contributionHash,
   cosignMessage,
-  releaseMessage,
+  removalMessage,
   rosterHash,
   selfMaskCommitment,
   setHash,
@@ -222,11 +222,11 @@ export function audit(
   });
 
   const finalHash = setHash('final', epoch, round, evidence.final);
-  const extras = new Map<MeterId, U64>();
-  for (const r of evidence.extras) {
-    if (!signedBy(registry, r.id, releaseMessage(epoch, round, r.id, finalHash, r.value), r.signature)) {
-      problems.push(`release of ${r.id} is not signed by its meter`);
-    } else extras.set(r.id, r.value);
+  const removals = new Map<MeterId, U64>();
+  for (const r of evidence.removals) {
+    if (!signedBy(registry, r.id, removalMessage(epoch, round, r.id, finalHash, r.value), r.signature)) {
+      problems.push(`removal of ${r.id} is not signed by its meter`);
+    } else removals.set(r.id, r.value);
   }
 
   let total: U64 = 0n;
@@ -241,9 +241,9 @@ export function audit(
     if (!equal(selfMaskCommitment(epoch, round, i, secret), c.commitment)) problems.push(`self-mask of ${i} does not match its commitment`);
     total = sub(sub(add(total, c.y), Buffer.from(secret).readBigUInt64LE(0)), c.correction);
     if (graph.get(i)?.some((j) => active.has(j) && !final.has(j))) {
-      const extra = extras.get(i);
-      if (extra === undefined) problems.push(`no signed release from ${i}`);
-      else total = sub(total, extra);
+      const removal = removals.get(i);
+      if (removal === undefined) problems.push(`no signed removal from ${i}`);
+      else total = sub(total, removal);
     }
   }
   const recomputed = decode(total);

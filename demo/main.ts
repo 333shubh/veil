@@ -251,12 +251,12 @@ function show(s: Snapshot): void {
   $('decoded').textContent = s.total === null ? '—' : fmtW(s.total);
 
   const unplugged = s.state.reduce((a, v) => a + (v === 2 ? 1 : 0), 0);
-  const after = s.ms.confirm + s.ms.collect + s.ms.release + s.ms.recover;
+  const after = s.ms.confirm + s.ms.collect + s.ms.check + s.ms.route + s.ms.release + s.ms.gather + s.ms.unmask + s.ms.recover;
   $('recovery').innerHTML = [
     ['unplugged', unplugged],
     ['left out this round (unplugged or missed the deadline)', leftOut],
     ['reports collected', `${Math.round(s.ms.report + s.ms.close)} ms`],
-    ['confirm, share release and unmasking', `${Math.round(after)} ms`],
+    ['confirm, check, release and any unmasking', `${Math.round(after)} ms`],
     ['meter-side CPU, per meter', `${s.meterMs.toFixed(1)} ms`],
   ]
     .map(([k, v]) => `<tr><td class="muted">${k}</td><td>${v}</td></tr>`)
@@ -347,8 +347,8 @@ function colluded(r: CollusionResult): void {
   const now = Number($<HTMLInputElement>('collude').value);
   if (now !== r.corrupt) return collude();
   $('colludeResult').innerHTML = r.exposed
-    ? `<span class="fail">exposed: ${r.guess} W</span> (true ${r.truth} W)`
-    : `<span class="ok">hidden</span> in all ${r.splits} splits (t = ${r.t})`;
+    ? `<span class="fail">exposed by the ${r.by} split: ${r.guess} W</span> (true ${r.truth} W)`
+    : `<span class="ok">hidden</span> in all ${r.splits} attempts, active-set and final-set splits (t = ${r.t})`;
 }
 
 $('tamper').addEventListener('click', () => send({ type: 'tamper', delta: 1000 }));
