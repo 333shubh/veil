@@ -25,7 +25,8 @@
     "indistinguishability": "node --experimental-strip-types --disable-warning=ExperimentalWarning experiments/indistinguishability.ts",
     "demo": "node --experimental-strip-types --disable-warning=ExperimentalWarning demo/build.ts --serve",
     "demo:build": "node --experimental-strip-types --disable-warning=ExperimentalWarning demo/build.ts",
-    "demo:soak": "npm run demo:build && node demo/dist/soak.mjs"
+    "demo:soak": "npm run demo:build && node demo/dist/soak.mjs",
+    "trace": "node --experimental-strip-types --disable-warning=ExperimentalWarning experiments/trace.ts"
   },
   "devDependencies": {
     "@types/node": "^22.20.4",
