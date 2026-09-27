@@ -17,6 +17,13 @@ export interface Design {
  */
 export const DESIGN: Design = { corrupt: 0.2, dropout: 0.1, privacyLog2: -40, recoveryLog2: -20, roundsPerEpoch: 17_280 };
 
+/**
+ * Smallest group whose published total is released, chosen from E5: at 10-second reporting, an attacker who knows a
+ * target home's water-pump wattage detects its pump starting in the group total with AUC at most 0.6 (upper end of the
+ * 95% interval) only from 200 homes up. The protocol's own minGroupSize must be set to this in deployment.
+ */
+export const MIN_GROUP_SIZE = 200;
+
 /** log2 of union bounds over the group. */
 export interface Failure {
   privacy: number; // some honest meter has >= t corrupt neighbours, or partition (below), in one epoch
