@@ -1,76 +1,14 @@
 // Phase 3 gate: replayed attacks. The test plays a malicious coordinator that controls every message and holds the
 // full state of the meters it corrupts; honest meters run the real protocol code.
 import { describe, expect, it } from 'vitest';
-import { prg } from '../src/crypto.ts';
+import { signedMask, splits, stolenMask, survivorSet } from '../src/adversary.ts';
 import { audit, recordFor } from '../src/ledger.ts';
-import { isAborted, type Confirm, type MeterId, type RoundEvidence } from '../src/protocol.ts';
-import { add, decode, sub, type U64 } from '../src/ring.ts';
-import { combine, type Share } from '../src/shamir.ts';
-import { distinctIds, everyone, Rng, runRound, setupGroup, type Group } from './support.ts';
-
-interface Internals {
-  epoch: { pairs: Map<MeterId, { mask: Uint8Array }> };
-}
-
-/** A corrupted meter's round mask with a neighbour, read straight from its state. */
-const stolenMask = (g: Group, owner: MeterId, peer: MeterId, round: number) =>
-  prg((g.meters.get(owner) as unknown as Internals).epoch.pairs.get(peer)!.mask, g.params.epoch, round);
-
-const signedMask = (acc: U64, self: MeterId, peer: MeterId, mask: U64) => (self < peer ? add(acc, mask) : sub(acc, mask));
+import type { MeterId, RoundEvidence } from '../src/protocol.ts';
+import { decode, sub, type U64 } from '../src/ring.ts';
+import { distinctIds, everyone, Rng, runRound, setupGroup } from './support.ts';
 
 function readingsFor(rng: Rng, ids: MeterId[]) {
   return new Map<MeterId, bigint>(ids.map((id) => [id, BigInt(rng.int(-5_000, 20_000))]));
-}
-
-/**
- * Survivor-set attack on `victim` in one round: the `dropped` honest neighbours are told the victim missed the
- * deadline, everyone else is told it reported. The coordinator collects every correction, share and corrupted state,
- * then tries to unmask the victim's report.
- */
-function survivorSet(g: Group, victim: MeterId, corrupt: ReadonlySet<MeterId>, dropped: ReadonlySet<MeterId>, round: number, forwardAll: boolean, rng: Rng) {
-  const readings = readingsFor(rng, g.ids);
-  const withVictim = new Set(g.ids);
-  const withoutVictim = new Set(g.ids.filter((id) => id !== victim));
-  const viewOf = (id: MeterId) => (dropped.has(id) ? withoutVictim : withVictim);
-  const y = new Map(g.ids.map((id) => [id, g.meters.get(id)!.report(round, readings.get(id)!).y]));
-
-  const confirms = new Map<MeterId, Confirm>();
-  for (const id of g.ids) {
-    const c = g.meters.get(id)!.confirm(round, viewOf(id));
-    if (!isAborted(c)) confirms.set(id, c);
-  }
-  const shares: Share[] = [];
-  let detected = 0;
-  for (const id of g.ids) {
-    const view = viewOf(id);
-    const inbox = [...confirms.values()].filter(
-      (c) => g.params.graph.get(id)!.includes(c.id) && view.has(c.id) && (forwardAll || viewOf(c.id) === view),
-    );
-    const r = g.meters.get(id)!.release(round, view, inbox);
-    if (isAborted(r)) {
-      if (!corrupt.has(id) && r.aborted.startsWith('active set differs')) detected++;
-      continue;
-    }
-    const s = r.shares.get(victim);
-    if (s !== undefined) shares.push({ x: BigInt(id), y: s });
-  }
-
-  // The coordinator's best reconstruction of the victim's reading.
-  let masks: U64 = 0n;
-  let missing = 0;
-  for (const j of g.params.graph.get(victim)!) {
-    if (corrupt.has(j)) masks = signedMask(masks, victim, j, stolenMask(g, j, victim, round));
-    else if (dropped.has(j)) masks = sub(masks, confirms.get(j)!.correction); // its correction is -s_vj m_vj
-    else missing++;
-  }
-  const t = g.params.threshold;
-  if (shares.length < t || missing > 0) return { unmasked: false, detected, shares: shares.length, missing };
-  const selfMask = Buffer.from(combine(shares, t)).readBigUInt64LE(0);
-  return { unmasked: decode(sub(sub(y.get(victim)!, selfMask), masks)) === readings.get(victim), detected, shares: shares.length, missing };
-}
-
-function splits<T>(items: readonly T[]): Set<T>[] {
-  return Array.from({ length: 2 ** items.length }, (_, mask) => new Set(items.filter((_, i) => mask & (1 << i))));
 }
 
 describe('survivor-set attack', () => {
@@ -84,7 +22,7 @@ describe('survivor-set attack', () => {
   it('fails for every split of the victim\'s neighbours when fewer than t are corrupted', () => {
     const corrupt = new Set(neighbours.slice(0, 2));
     const honest = neighbours.filter((j) => !corrupt.has(j));
-    const outcomes = splits(honest).map((dropped) => survivorSet(g, victim, corrupt, dropped, round++, false, rng));
+    const outcomes = splits(honest).map((dropped) => survivorSet(g, victim, corrupt, dropped, round++, false, readingsFor(rng, g.ids)));
     console.log(`[attack] survivor-set, 2 of 6 neighbours corrupted, t = 4: ${outcomes.filter((o) => o.unmasked).length}/${outcomes.length} splits unmask the victim`);
     expect(outcomes.filter((o) => o.unmasked)).toEqual([]);
   });
@@ -92,7 +30,7 @@ describe('survivor-set attack', () => {
   it('succeeds once t neighbours are corrupted (control: the attack is real)', () => {
     const corrupt = new Set(neighbours.slice(0, 4));
     const honest = neighbours.filter((j) => !corrupt.has(j));
-    const outcomes = splits(honest).map((dropped) => survivorSet(g, victim, corrupt, dropped, round++, false, rng));
+    const outcomes = splits(honest).map((dropped) => survivorSet(g, victim, corrupt, dropped, round++, false, readingsFor(rng, g.ids)));
     console.log(`[attack] survivor-set, 4 of 6 neighbours corrupted, t = 4: ${outcomes.filter((o) => o.unmasked).length}/${outcomes.length} splits unmask the victim`);
     expect(outcomes.some((o) => o.unmasked)).toBe(true);
   });
@@ -100,7 +38,7 @@ describe('survivor-set attack', () => {
   it('is detected by honest meters when the coordinator relays the conflicting confirmations', () => {
     const corrupt = new Set(neighbours.slice(0, 2));
     const honest = neighbours.filter((j) => !corrupt.has(j));
-    const o = survivorSet(g, victim, corrupt, new Set(honest.slice(0, 2)), round++, true, rng);
+    const o = survivorSet(g, victim, corrupt, new Set(honest.slice(0, 2)), round++, true, readingsFor(rng, g.ids));
     console.log(`[attack] survivor-set with conflicting confirmations relayed: ${o.detected} honest meters detect it, victim unmasked: ${o.unmasked}`);
     expect(o.detected).toBeGreaterThan(0);
     expect(o.unmasked).toBe(false);
