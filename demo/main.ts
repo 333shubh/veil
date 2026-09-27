@@ -5,6 +5,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import e5 from '../experiments/results/e5.json';
 import { MIN_GROUP_SIZE } from '../src/params.ts';
 import type { CollusionResult } from './collusion.ts';
+import type { VerifiedResult } from './verified.ts';
 import type { Snapshot } from './engine.ts';
 import type { Command, Event } from './worker.ts';
 
@@ -240,6 +241,7 @@ function show(s: Snapshot): void {
     ['published', c.published],
     ['exact', c.exact],
     ['mismatches', `<b class="${c.mismatches ? 'fail' : 'ok'}">${c.mismatches}</b>`],
+    ['flagged by plausibility checks', c.flagged],
     ['withheld (group too small)', c.suppressed],
     ['aborted', c.aborted],
   ]
@@ -263,6 +265,7 @@ function show(s: Snapshot): void {
     .join('');
   if (s.aborts.length) $('recovery').innerHTML += `<tr><td class="warn" colspan="2">${s.aborts.length} meter(s) refused: ${s.aborts[0]}</td></tr>`;
 
+  lieStatus(s);
   if (!$('billingBox').classList.contains('hidden')) billing(s);
   spark();
   paint();
@@ -351,6 +354,43 @@ function colluded(r: CollusionResult): void {
     : `<span class="ok">hidden</span> in all ${r.splits} attempts, active-set and final-set splits (t = ${r.t})`;
 }
 
+// Lying meter: one home in the city adds a lie to its reports; the verified-mode group shows what commitments catch.
+$('lie').addEventListener('click', () => {
+  const id = 1 + Math.floor(Math.random() * (last?.state.length ?? 1));
+  send({ type: 'lie', id, watts: Number($<HTMLSelectElement>('lieSize').value) });
+});
+$('honest').addEventListener('click', () => send({ type: 'lie', id: 1, watts: 0 }));
+function lieStatus(s: Snapshot): void {
+  if (!s.lie) return void ($('lieOut').innerHTML = s.implausible.length ? `<span class="warn">Flagged with no liar</span>: ${s.implausible[0]}` : 'No home is lying.');
+  const gap = s.total !== null && s.consumption !== null ? s.total - s.consumption : null;
+  $('lieOut').innerHTML =
+    `Home ${s.lie.house} reports ${fmtW(s.lie.watts)} more than it draws. ` +
+    (gap === null ? 'No total this round.' : `The total is still exact over what homes reported, and ${fmtW(gap)} above what they drew. `) +
+    (s.implausible.length ? `<span class="ok">Plausibility check flags it</span>: ${s.implausible.join('; ')}.` : '<span class="fail">Plausibility check passes it.</span>');
+}
+const LIE_TEXT: Record<VerifiedResult['kind'], string> = {
+  masked: 'changes its masked value but not its commitment',
+  claimed: 'claims +50 kW, outside the range',
+  inRange: 'claims +5 kW, inside the range',
+};
+for (const b of document.querySelectorAll<HTMLButtonElement>('[data-lie]')) {
+  b.addEventListener('click', () => {
+    $('verifiedOut').textContent = 'running a verified round (proofs take a few seconds in the browser)…';
+    send({ type: 'verified', kind: b.dataset.lie as VerifiedResult['kind'] });
+  });
+}
+function verifiedResult(r: VerifiedResult): void {
+  const head = `A home ${LIE_TEXT[r.kind]}: `;
+  if (r.status === 'aborted') return void ($('verifiedOut').innerHTML = head + `<span class="ok">round refused</span>: ${r.reason}.`);
+  if (r.status !== 'published') return void ($('verifiedOut').innerHTML = head + `round ${r.status}.`);
+  const lied = r.total !== r.honest;
+  $('verifiedOut').innerHTML =
+    head +
+    (r.liarIncluded ? '' : '<span class="ok">its report was left out</span>: the range proof did not check. ') +
+    `Published ${fmtW(Number(r.total))}${lied ? ` against a true ${fmtW(Number(r.honest))}: <span class="fail">the lie is in the total</span>` : ', the true sum of the homes included'}. ` +
+    `Validators checking every proof: ${r.validators}.`;
+}
+
 $('tamper').addEventListener('click', () => send({ type: 'tamper', delta: 1000 }));
 function tampered(r: Extract<Event, { type: 'tamper' }>['result']): void {
   if (!r) return void ($('auditOut').textContent = 'No total published yet.');
@@ -384,6 +424,7 @@ worker.onmessage = (e: MessageEvent<Event>) => {
   } else if (ev.type === 'snapshot') show(ev.snap);
   else if (ev.type === 'tamper') tampered(ev.result);
   else if (ev.type === 'collusion') colluded(ev.result);
+  else if (ev.type === 'verified') verifiedResult(ev.result);
   else if (ev.type === 'error') {
     $('overlay').classList.remove('hidden');
     $('progress').innerHTML = `<span class="fail">Engine error</span><pre class="mono" style="white-space:pre-wrap">${ev.message}</pre>`;

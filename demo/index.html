@@ -99,6 +99,23 @@
   </div>
 
   <div class="card">
+    <h2>Lying meter</h2>
+    <div class="muted">Masking hides each reading, so a meter can report anything. By default the operator runs plausibility checks on each total; they catch only large lies.</div>
+    <div class="row" style="margin:8px 0">
+      <select id="lieSize" class="action"><option value="5000">+5 kW</option><option value="50000">+50 kW</option><option value="500000">+500 kW</option></select>
+      <button class="action" id="lie">A random home lies</button><button class="action" id="honest">Stop</button>
+    </div>
+    <div id="lieOut" class="muted">No home is lying.</div>
+    <div class="muted" style="margin-top:10px">Verified mode, on a separate group of 16 homes: each report carries a commitment and a range proof (−32,768 to 32,767 W), and each total must equal the sum of the commitments. One home lies:</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0">
+      <button class="action" data-lie="masked">in its masked value only</button>
+      <button class="action" data-lie="claimed">claims +50 kW</button>
+      <button class="action" data-lie="inRange">claims +5 kW</button>
+    </div>
+    <div id="verifiedOut" class="muted"></div>
+  </div>
+
+  <div class="card">
     <h2>Group size</h2>
     <div class="muted">Experiment E5: detecting one home's water pump switching on, from the total of a group of this size.</div>
     <input type="range" id="size" min="0" max="10" value="8">

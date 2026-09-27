@@ -2,7 +2,8 @@
 // and which messages reach whom, and holds the full state of the meters it corrupts, while honest meters run the real
 // protocol code. Used by the attack tests and the demo's collusion slider.
 import { prg } from './crypto.ts';
-import { isAborted, openEscrow, setHash, type Check, type Confirm, type MeterId, type Release, type Removal, type Unmask } from './protocol.ts';
+import { G, mod, point } from './pedersen.ts';
+import { isAborted, openEscrow, reportTag, setHash, type Check, type Confirm, type MeterId, type Release, type Removal, type Unmask } from './protocol.ts';
 import { add, decode, sub, type U64 } from './ring.ts';
 import { combine, type Share } from './shamir.ts';
 import type { Group } from './simulation.ts';
@@ -132,6 +133,35 @@ export function attack(
   if (!vc || self === undefined || missing > 0) return { unmasked: false, detected, shares: secretShares, missing };
   const guess = decode(sub(sub(y.get(victim)!, Buffer.from(self).readBigUInt64LE(0)), masks));
   return { unmasked: guess === readings.get(victim), guess, detected, shares: secretShares, missing };
+}
+
+interface MeterInternals {
+  epoch: { reportKey: Uint8Array; params: { epoch: number }; rounds: Map<number, { y: U64; pedersen?: Uint8Array }> };
+}
+
+/**
+ * How a malicious meter lies, on top of an honestly built report. `masked` adds to its masked value only, leaving its
+ * commitment (verified mode) behind; `claimed` adds to the reading it claims, moving the masked value and the
+ * commitment together but keeping the range proof of the true reading, which then no longer matches.
+ */
+export interface Lie {
+  masked?: bigint;
+  claimed?: bigint;
+}
+
+/** Make meter `id` lie in every report from now on; it still follows the protocol in every other step. */
+export function makeLiar(g: Group, id: MeterId, lie: Lie): void {
+  const meter = g.meters.get(id)!;
+  const honest = meter.report.bind(meter);
+  meter.report = (round: number, reading: bigint) => {
+    const r = honest(round, reading);
+    const e = (meter as unknown as MeterInternals).epoch;
+    const rs = e.rounds.get(round)!;
+    const delta = BigInt.asUintN(64, (lie.masked ?? 0n) + (lie.claimed ?? 0n));
+    rs.y = add(rs.y, delta);
+    if (lie.claimed && rs.pedersen) rs.pedersen = point(rs.pedersen).add(G.multiply(mod(lie.claimed))).toBytes();
+    return { ...r, y: rs.y, pedersen: rs.pedersen, tag: reportTag(e.reportKey, e.params.epoch, round, id, rs.y, rs.pedersen) };
+  };
 }
 
 /**
