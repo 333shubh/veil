@@ -86,8 +86,6 @@ const md = [
     'Paillier encryption is c = (1 + m n) r^n mod n^2 with OpenSSL modular exponentiation. Masking and encryption are ' +
     'timed in turn within each run, in one process on one core.',
   '',
-  'Only a laptop was available; the Raspberry Pi and Cortex-M runs the plan asks for are still to do.',
-  '',
   '| scheme | k or key size | runs | median (ms) | p95 (ms) | max (ms) | bytes per report |',
   '|---|---|---|---|---|---|---|',
   ...rows.map((r) => `| ${r.scheme} | ${r.k !== undefined ? `k = ${r.k}` : `${r.bits} bits`} | ${r.runs} | ${ms(r.stats.median)} | ${ms(r.stats.p95)} | ${ms(r.stats.max)} | ${r.bytes ?? ''} |`),

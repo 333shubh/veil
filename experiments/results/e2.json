@@ -1,6 +1,6 @@
 {
-  "environment": "13th Gen Intel(R) Core(TM) i5-13450HX (16 threads, pinned to logical CPU 10 (a performance core)), win32 10.0.26200, Node v22.10.0, OpenSSL 3.0.15+quic",
-  "seconds": 54.8,
+  "environment": "13th Gen Intel(R) Core(TM) i5-13450HX (16 threads, pinned to logical CPU 0 (a performance core)), win32 10.0.26200, Node v22.10.0, OpenSSL 3.0.15+quic",
+  "seconds": 89.8,
   "n": 200,
   "rows": [
     {
@@ -20,8 +20,8 @@
       "k": 8,
       "dropouts": "10% + 2% + 2%",
       "report": 32,
-      "confirm": 660,
-      "release": 298,
+      "confirm": 661,
+      "release": 297,
       "sent": 990,
       "sentMax": 1139,
       "confirmsIn": 736,
@@ -46,13 +46,13 @@
       "k": 16,
       "dropouts": "10% + 2% + 2%",
       "report": 32,
-      "confirm": 1160,
+      "confirm": 1162,
       "release": 551,
-      "sent": 1743,
+      "sent": 1745,
       "sentMax": 2019,
-      "confirmsIn": 1455,
+      "confirmsIn": 1459,
       "announcements": 1398,
-      "received": 2854,
+      "received": 2857,
       "receivedMax": 3160
     },
     {
@@ -72,14 +72,14 @@
       "k": 32,
       "dropouts": "10% + 2% + 2%",
       "report": 32,
-      "confirm": 2194,
-      "release": 1051,
-      "sent": 3277,
+      "confirm": 2195,
+      "release": 1055,
+      "sent": 3283,
       "sentMax": 3779,
-      "confirmsIn": 2942,
+      "confirmsIn": 2943,
       "announcements": 1412,
-      "received": 4353,
-      "receivedMax": 4848
+      "received": 4355,
+      "receivedMax": 4812
     },
     {
       "k": 54,
@@ -98,14 +98,14 @@
       "k": 54,
       "dropouts": "10% + 2% + 2%",
       "report": 32,
-      "confirm": 3608,
-      "release": 1760,
-      "sent": 5400,
-      "sentMax": 6015,
-      "confirmsIn": 4976,
+      "confirm": 3609,
+      "release": 1763,
+      "sent": 5405,
+      "sentMax": 6089,
+      "confirmsIn": 4978,
       "announcements": 1414,
-      "received": 6390,
-      "receivedMax": 6920
+      "received": 6392,
+      "receivedMax": 6997
     },
     {
       "k": 80,
@@ -124,41 +124,41 @@
       "k": 80,
       "dropouts": "10% + 2% + 2%",
       "report": 32,
-      "confirm": 5233,
-      "release": 2570,
-      "sent": 7835,
-      "sentMax": 8582,
-      "confirmsIn": 7313,
+      "confirm": 5235,
+      "release": 2573,
+      "sent": 7840,
+      "sentMax": 8729,
+      "confirmsIn": 7316,
       "announcements": 1402,
-      "received": 8715,
-      "receivedMax": 9226
+      "received": 8719,
+      "receivedMax": 9513
     }
   ],
   "setup": [
     {
       "k": 8,
-      "sent": 136,
-      "received": 8392
+      "sent": 5976,
+      "received": 22520
     },
     {
       "k": 16,
-      "sent": 136,
-      "received": 9480
+      "sent": 10632,
+      "received": 37736
     },
     {
       "k": 32,
-      "sent": 136,
-      "received": 11656
+      "sent": 19944,
+      "received": 68168
     },
     {
       "k": 54,
-      "sent": 136,
-      "received": 14648
+      "sent": 32748,
+      "received": 110012
     },
     {
       "k": 80,
-      "sent": 136,
-      "received": 18184
+      "sent": 47880,
+      "received": 159464
     }
   ],
   "reportBytes": 32
