@@ -24,6 +24,18 @@ export const DESIGN: Design = { corrupt: 0.2, dropout: 0.1, privacyLog2: -40, re
  */
 export const MIN_GROUP_SIZE = 200;
 
+/**
+ * Verified mode's range: 16 bits cover readings from -32,768 to 32,767 W, well beyond what a simulated home draws or
+ * exports; a reading outside it is a lie or a fault.
+ */
+export const VERIFIED_BITS = 16;
+
+/**
+ * Plausibility bounds on a published total, from E9's calibration day of 200 simulated homes at 10-second rounds: the
+ * observed range of the mean load per home widened by a quarter on each side, and twice its largest one-round move.
+ */
+export const PLAUSIBLE = { minPerHome: 44, maxPerHome: 885, maxStepPerHome: 79 };
+
 /** log2 of union bounds over the group. */
 export interface Failure {
   privacy: number; // some honest meter has >= t corrupt neighbours, or partition (below), in one epoch
@@ -140,6 +152,16 @@ export function perMeter(n: number, k: number, t: number, d: Design): PerMeter {
 export function strongestThreshold(n: number, k: number, d: Design): number | undefined {
   const m = model(n, k, d);
   for (let t = k; t > k / 2; t--) if (bounds(m, t, d).recovery <= d.recoveryLog2) return t;
+  return undefined;
+}
+
+/**
+ * Smallest t > k/2 whose privacy meets the bound, or undefined if none does. A meter in F needs t of its F neighbours
+ * to agree before it releases anything, so the smallest safe t tolerates the most dropout for a given k.
+ */
+export function privacyThreshold(n: number, k: number, d: Design): number | undefined {
+  const m = model(n, k, d);
+  for (let t = Math.floor(k / 2) + 1; t <= k; t++) if (bounds(m, t, d).privacy <= d.privacyLog2) return t;
   return undefined;
 }
 

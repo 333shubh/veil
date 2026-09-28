@@ -3,8 +3,9 @@
 // worker (shard-worker.ts) and in a Node thread for the soak run (shard-thread.ts).
 import { Buffer } from 'buffer';
 import type { SigningKey } from '../src/crypto.ts';
-import { Meter, type Confirm, type Encapsulation, type EpochAnchor, type GroupParams, type MeterId, type PublicKeys } from '../src/protocol.ts';
+import { Meter, type Check, type Confirm, type Encapsulation, type EpochAnchor, type GroupParams, type MeterId, type PublicKeys } from '../src/protocol.ts';
 import { Collusion } from './collusion.ts';
+import { VerifiedDemo, type LieKind } from './verified.ts';
 
 export interface Request {
   seq: number;
@@ -39,6 +40,7 @@ export function hydrate<T>(v: T): T {
 export function host(): (req: Request) => Response {
   const meters = new Map<MeterId, Meter>();
   let collusion: Collusion | undefined;
+  let verified: VerifiedDemo | undefined;
   const all = () => [...meters.values()];
   const methods: Record<string, (...args: never[]) => unknown> = {
     init(devices: [MeterId, SigningKey][], secrets: Map<MeterId, Uint8Array>, registry: Map<MeterId, Uint8Array>) {
@@ -51,11 +53,17 @@ export function host(): (req: Request) => Response {
     },
     report: (round: number, readings: Map<MeterId, bigint>) => [...readings].map(([id, r]) => meters.get(id)!.report(round, r)),
     confirm: (round: number, active: ReadonlySet<MeterId>, ids: MeterId[]) => ids.map((id) => meters.get(id)!.confirm(round, active)),
-    release: (round: number, final: ReadonlySet<MeterId>, inbox: Map<MeterId, Confirm[]>) =>
-      [...inbox].map(([id, confirms]) => meters.get(id)!.release(round, final, confirms)),
+    check: (round: number, final: ReadonlySet<MeterId>, inbox: Map<MeterId, Confirm[]>) =>
+      [...inbox].map(([id, confirms]) => meters.get(id)!.check(round, final, confirms)),
+    release: (round: number, inbox: Map<MeterId, Check[]>) => [...inbox].map(([id, checks]) => meters.get(id)!.release(round, checks)),
+    unmask: (round: number, requests: Map<MeterId, Set<MeterId>>) => [...requests].map(([id, want]) => meters.get(id)!.unmask(round, want)),
     collusion(corrupt: number, reading: bigint) {
       collusion ??= new Collusion();
       return collusion.attack(corrupt, reading);
+    },
+    verified(kind: LieKind) {
+      verified ??= new VerifiedDemo();
+      return verified.run(kind);
     },
   };
   return (req) => {
