@@ -1,0 +1,193 @@
+{
+  "environment": "13th Gen Intel(R) Core(TM) i5-13450HX (16 threads), win32 10.0.26200, Node v22.10.0, OpenSSL 3.0.15+quic",
+  "seconds": 970.1,
+  "observed": {
+    "min": 184.785,
+    "max": 744.76,
+    "step": 39.094999999999914
+  },
+  "derived": {
+    "minPerHome": 44,
+    "maxPerHome": 885,
+    "maxStepPerHome": 79
+  },
+  "plausible": {
+    "minPerHome": 44,
+    "maxPerHome": 885,
+    "maxStepPerHome": 79
+  },
+  "matches": true,
+  "falseAlarms": 0,
+  "rounds": 8640,
+  "sudden": [
+    {
+      "lie": 1000,
+      "caught": 0,
+      "flaggedShare": 0
+    },
+    {
+      "lie": 2000,
+      "caught": 0,
+      "flaggedShare": 0
+    },
+    {
+      "lie": 5000,
+      "caught": 0,
+      "flaggedShare": 0
+    },
+    {
+      "lie": 10000,
+      "caught": 0,
+      "flaggedShare": 0
+    },
+    {
+      "lie": 20000,
+      "caught": 60,
+      "flaggedShare": 0.005555555555555556
+    },
+    {
+      "lie": 50000,
+      "caught": 60,
+      "flaggedShare": 0.020462962962962964
+    },
+    {
+      "lie": 100000,
+      "caught": 60,
+      "flaggedShare": 0.4160185185185185
+    },
+    {
+      "lie": 200000,
+      "caught": 60,
+      "flaggedShare": 1
+    }
+  ],
+  "ramped": [
+    {
+      "lie": 1000,
+      "caught": 0,
+      "flaggedShare": 0
+    },
+    {
+      "lie": 2000,
+      "caught": 0,
+      "flaggedShare": 0
+    },
+    {
+      "lie": 5000,
+      "caught": 0,
+      "flaggedShare": 0
+    },
+    {
+      "lie": 10000,
+      "caught": 0,
+      "flaggedShare": 0
+    },
+    {
+      "lie": 20000,
+      "caught": 0,
+      "flaggedShare": 0
+    },
+    {
+      "lie": 50000,
+      "caught": 2,
+      "flaggedShare": 0.008148148148148147
+    },
+    {
+      "lie": 100000,
+      "caught": 32,
+      "flaggedShare": 0.37287037037037035
+    },
+    {
+      "lie": 200000,
+      "caught": 60,
+      "flaggedShare": 0.822962962962963
+    }
+  ],
+  "verified": [
+    {
+      "name": "changes its masked value only",
+      "proofSample": 1,
+      "rounds": 10,
+      "aborted": 10,
+      "liarLeftOut": 0,
+      "liePublished": 0,
+      "validatorsRefused": 0
+    },
+    {
+      "name": "claims an out-of-range reading",
+      "proofSample": 1,
+      "rounds": 10,
+      "aborted": 0,
+      "liarLeftOut": 10,
+      "liePublished": 0,
+      "validatorsRefused": 0
+    },
+    {
+      "name": "claims an out-of-range reading",
+      "proofSample": 0.1,
+      "rounds": 100,
+      "aborted": 0,
+      "liarLeftOut": 9,
+      "liePublished": 91,
+      "validatorsRefused": 91
+    },
+    {
+      "name": "claims a false reading within range",
+      "proofSample": 1,
+      "rounds": 10,
+      "aborted": 0,
+      "liarLeftOut": 0,
+      "liePublished": 10,
+      "validatorsRefused": 0
+    }
+  ],
+  "costs": {
+    "commit": {
+      "n": 200,
+      "median": 1.1114000000525266,
+      "p95": 1.707700000028126,
+      "mean": 1.1738885000004666,
+      "max": 2.3940000000875443
+    },
+    "prove": {
+      "n": 200,
+      "median": 53.27700000000186,
+      "p95": 67.70649999997113,
+      "mean": 56.37353199999838,
+      "max": 81.70510000002105
+    },
+    "verify": {
+      "n": 200,
+      "median": 56.83519999997225,
+      "p95": 70.66929999995045,
+      "mean": 59.90461700000451,
+      "max": 98.20879999990575
+    },
+    "proofBytes": 1776,
+    "rows": [
+      {
+        "label": "plain",
+        "report": 0.16859999997541308,
+        "close": 0.9133000000147149,
+        "coordinator": 28.46410000009928,
+        "ledger": 29.11309999995865
+      },
+      {
+        "label": "verified, every proof checked",
+        "report": 55.07559999998193,
+        "close": 11867.426499999943,
+        "coordinator": 11940.120600000024,
+        "ledger": 93.51339999993797,
+        "ledgerProofs": 11642.251900000032
+      },
+      {
+        "label": "verified, 10% of proofs checked",
+        "report": 74.47869999997783,
+        "close": 1331.608099999954,
+        "coordinator": 1403.7662999997847,
+        "ledger": 110.46840000001248,
+        "ledgerProofs": 15399.757900000084
+      }
+    ]
+  }
+}

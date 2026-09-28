@@ -1,32 +1,32 @@
 {
-  "environment": "13th Gen Intel(R) Core(TM) i5-13450HX (16 threads, pinned to logical CPU 2 (a performance core)), win32 10.0.26200, Node v22.10.0, OpenSSL 3.0.15+quic",
-  "seconds": 62.3,
+  "environment": "13th Gen Intel(R) Core(TM) i5-13450HX (16 threads), win32 10.0.26200, Node v22.10.0, OpenSSL 3.0.15+quic",
+  "seconds": 59.9,
   "seed": "veil E6 seed 1",
   "equal": 288,
   "rounds": 288,
   "rows": [
     {
       "source": "exact totals",
-      "error": 0.04128749314792426
+      "error": 0.044222380231484934
     },
     {
       "source": "Veil totals",
-      "error": 0.04128749314792426,
+      "error": 0.044222380231484934,
       "note": "equal to exact on 288/288 rounds run through the protocol"
     },
     {
       "source": "Laplace noise, epsilon 0.1 per total",
-      "error": 5.91061170170034,
+      "error": 7.721320785005229,
       "noise": 100000
     },
     {
       "source": "Laplace noise, epsilon 1 per total",
-      "error": 0.30515280248629867,
+      "error": 0.4724248330250669,
       "noise": 10000
     },
     {
       "source": "Laplace noise, epsilon 10 per total",
-      "error": 0.04254781264267098,
+      "error": 0.04514620458761241,
       "noise": 1000
     }
   ]

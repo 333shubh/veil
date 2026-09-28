@@ -9,7 +9,9 @@ import { BYTES, encapsulationBytes, keysBytes, perMeter, reportBytes, setBytes, 
 const N = 200;
 const KS = [8, 16, 32, 54, 80];
 const ROUNDS = 10;
-const DROPOUT = 0.1; // before the deadline; then 2% more before confirming, 2% before checking and 2% before releasing
+// Dropouts: 10% before the deadline, then 2% before confirming and 2% after checking. Crashes before checking can abort a
+// round (E4), so they are left out here: these rows measure the bytes of rounds that recover.
+const DROPOUT = 0.1;
 const LATE = 0.02;
 const SCALE_N = [100, 200, 1_000, 10_000];
 
@@ -20,9 +22,8 @@ function pattern(ids: MeterId[], dropouts: boolean): Pattern {
   if (!dropouts) return everyone(ids);
   const reporting = ids.filter(() => !chance(DROPOUT));
   const confirming = reporting.filter(() => !chance(LATE));
-  const checking = confirming.filter(() => !chance(LATE));
-  const releasing = checking.filter(() => !chance(LATE));
-  return { reporting: new Set(reporting), confirming: new Set(confirming), checking: new Set(checking), releasing: new Set(releasing) };
+  const releasing = confirming.filter(() => !chance(LATE));
+  return { reporting: new Set(reporting), confirming: new Set(confirming), releasing: new Set(releasing) };
 }
 
 const sum = (b: MeterBytes) => ({
@@ -49,7 +50,7 @@ for (const k of KS) {
     const max = (f: (b: MeterBytes) => number) => Math.max(...all.map(f));
     const row = {
       k,
-      dropouts: dropouts ? `${DROPOUT * 100}% + ${LATE * 100}% + ${LATE * 100}% + ${LATE * 100}%` : 'none',
+      dropouts: dropouts ? `${DROPOUT * 100}% before the deadline, ${LATE * 100}% before confirming, ${LATE * 100}% after checking` : 'none',
       published,
       report: mean((b) => b.sent.report),
       confirm: mean((b) => b.sent.confirm),
