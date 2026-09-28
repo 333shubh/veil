@@ -17,6 +17,7 @@ const FILES: Record<string, string> = {
   E6: 'experiments/results/e6.md',
   E7: 'experiments/results/e7.md',
   E8: 'experiments/results/e8.md',
+  E9: 'experiments/results/e9.md',
   claims: 'experiments/results/claims.md',
   dropout: 'experiments/results/india-dropout.md',
   load: 'experiments/results/load-validation.md',
@@ -26,19 +27,23 @@ const FILES: Record<string, string> = {
   wire: 'experiments/wire.ts',
   exactness: 'test/exactness.test.ts',
   attacks: 'test/attacks.test.ts',
+  verified: 'test/verified.test.ts',
+  consortium: 'test/consortium.test.ts',
+  split: 'experiments/results/final-split-phase7.md',
+  rounds: 'docs/rounds.md',
   demo: 'demo/engine.ts',
 };
 
 /** docs/sources.md: one `- [S<n>] ... Quote: "..."` line per source; a source's numbers must be in its quote. */
 const sources = new Map<string, string>();
-for (const line of read('docs/sources.md').split('\n')) {
+for (const line of read('docs/sources.md').split(/\r?\n/)) {
   const m = /^- \[(S\d+)\].*?Quote: (.*)$/.exec(line);
   if (m) sources.set(m[1]!, m[2]!);
 }
 
 const plain = (s: string) => s.replace(/(?<=\d)[,_](?=\d)/g, '');
 const NUMBER = /(?<![\w.\-^/])(?:2\^-?\d+|\d(?:[\d,]*\d)?(?:\.\d+)?)(?![\w^])/g; // 2^-40 counts as one number
-const TAG = /\[(E\d|S\d+|claims|dropout|load|indist|soak|params|wire|exactness|attacks|demo)\]/g;
+const TAG = /\[(E\d|S\d+|claims|dropout|load|indist|soak|params|wire|exactness|attacks|verified|consortium|split|rounds|demo)\]/g;
 
 /** Paragraphs, list items and table rows, without fenced code, headings, inline code and link targets. */
 function units(doc: string): string[] {
@@ -49,7 +54,7 @@ function units(doc: string): string[] {
     if (para.length) out.push(para.join(' '));
     para = [];
   };
-  for (const line of doc.split('\n')) {
+  for (const line of doc.split(/\r?\n/)) {
     if (line.startsWith('```')) {
       fenced = !fenced;
       flush();

@@ -79,13 +79,14 @@ export function simulateLoad(homes: readonly MeterId[], days: number, interval: 
     if (hasFridge) cycle(0, samples, fridgeWatts, [5, 15], [8, 20]);
 
     for (let d = 0; d < days; d++) {
-      // Fans run most of the day and night; each fan switches every half hour or so.
+      // Fans run most of the day and night; each fan switches every half hour or so, on its own clock.
       for (let f = 0; f < fans; f++) {
-        for (let i = at(d, 0); i < at(d + 1, 0); i += span(30)) if (u() < 0.85) add(i, i + span(30), fanWatts);
+        const phase = between(0, 0.5);
+        for (let i = at(d, phase - 0.5); i < at(d + 1, phase - 0.5); i += span(30)) if (u() < 0.85) add(i, i + span(30), fanWatts);
       }
-      // Lights and television.
-      for (let i = at(d, 18.5); i < at(d, 23.5); i += span(15)) add(i, i + span(15), between(100, 300) * size);
-      for (let i = at(d, 5.5); i < at(d, 7); i += span(15)) add(i, i + span(15), between(30, 100) * size);
+      // Lights and television, switched on and off at each home's own times, not in unison.
+      for (let i = at(d, between(18, 19.25)), end = at(d, between(22.5, 24)); i < end; i += span(15)) add(i, Math.min(end, i + span(15)), between(100, 300) * size);
+      for (let i = at(d, between(5, 6)), end = at(d, between(6.5, 7.75)); i < end; i += span(15)) add(i, Math.min(end, i + span(15)), between(30, 100) * size);
       const sessions = Math.round(between(1, 4));
       for (let s = 0; s < sessions; s++) {
         const start = at(d, u() < 0.3 ? between(11, 14) : between(18, 22.5));

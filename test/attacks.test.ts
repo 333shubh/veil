@@ -1,7 +1,7 @@
 // Phase 3 gate: replayed attacks. The test plays a malicious coordinator that controls every message and holds the
 // full state of the meters it corrupts; honest meters run the real protocol code.
 import { describe, expect, it } from 'vitest';
-import { signedMask, splits, stolenMask, survivorSet } from '../src/adversary.ts';
+import { finalSplit, signedMask, splits, stolenMask, survivorSet } from '../src/adversary.ts';
 import { audit, recordFor } from '../src/ledger.ts';
 import type { MeterId, RoundEvidence } from '../src/protocol.ts';
 import { decode, sub, type U64 } from '../src/ring.ts';
@@ -42,6 +42,36 @@ describe('survivor-set attack', () => {
     console.log(`[attack] survivor-set with conflicting confirmations relayed: ${o.detected} honest meters detect it, victim unmasked: ${o.unmasked}`);
     expect(o.detected).toBeGreaterThan(0);
     expect(o.unmasked).toBe(false);
+  });
+});
+
+describe('final-set split', () => {
+  // The coordinator shows everyone the true U, but shows the victim an F without some honest neighbours (so the victim
+  // removes its masks with them) while those neighbours are shown the full F (so they pass on the victim's shares).
+  // Against the Phase 7 protocol this unmasked the victim with no corrupt meters (experiments/results/final-split-phase7.md).
+  const rng = new Rng(34);
+  const ids = distinctIds(rng, 16);
+  const g = setupGroup(ids, 6, 6, 4); // k = 6, t = 4
+  const victim = ids[0]!;
+  const neighbours = g.params.graph.get(victim)!;
+  let round = 100;
+
+  it("fails for every split of the victim's neighbours when fewer than t are corrupted", () => {
+    for (const corrupted of [0, 2, 3]) {
+      const corrupt = new Set(neighbours.slice(0, corrupted));
+      const honest = neighbours.filter((j) => !corrupt.has(j));
+      const outcomes = splits(honest).map((excluded) => finalSplit(g, victim, corrupt, excluded, round++, readingsFor(rng, g.ids)));
+      console.log(`[attack] final-set split, ${corrupted} of 6 neighbours corrupted, t = 4: ${outcomes.filter((o) => o.unmasked).length}/${outcomes.length} splits unmask the victim`);
+      expect(outcomes.filter((o) => o.unmasked)).toEqual([]);
+    }
+  });
+
+  it('succeeds once t neighbours are corrupted (control: the attack is real)', () => {
+    const corrupt = new Set(neighbours.slice(0, 4));
+    const honest = neighbours.filter((j) => !corrupt.has(j));
+    const outcomes = splits(honest).map((excluded) => finalSplit(g, victim, corrupt, excluded, round++, readingsFor(rng, g.ids)));
+    console.log(`[attack] final-set split, 4 of 6 neighbours corrupted, t = 4: ${outcomes.filter((o) => o.unmasked).length}/${outcomes.length} splits unmask the victim`);
+    expect(outcomes.some((o) => o.unmasked)).toBe(true);
   });
 });
 

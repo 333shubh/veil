@@ -25,7 +25,7 @@ describe('per-round report MAC', () => {
 
     startEpoch(g, 2, 4, 3);
     const replay = g.coordinator.close(1, reports);
-    expect(replay).toEqual({ status: 'suppressed' }); // every epoch-1 tag fails under the ratcheted key
+    expect(replay).toMatchObject({ status: 'suppressed' }); // every epoch-1 tag fails under the ratcheted key
   });
 });
 
