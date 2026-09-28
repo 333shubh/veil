@@ -1,10 +1,12 @@
 // E4: does recovery stay exact? Random dropouts from 0 to 50 percent, crashes at each point of a round, a target's
-// neighbours dropped on purpose, and how far a larger neighbourhood stretches the dropout a round survives, in a group
-// of 200.
+// neighbours dropped on purpose, how far a larger neighbourhood stretches the dropout a round survives, and how the
+// graph's structure changes that, in a group of 200.
 // Run: npm run e4   (writes experiments/results/e4.md and e4.json)
+import { randomBytes } from 'node:crypto';
 import { hkdf, u32Stream } from '../src/crypto.ts';
+import { harary } from '../src/graph.ts';
 import { choose, DESIGN, privacyThreshold } from '../src/params.ts';
-import type { MeterId } from '../src/protocol.ts';
+import { finalSet, type MeterId } from '../src/protocol.ts';
 import { coordinatorMs, runRound, setupGroup, type Group, type Pattern, type RoundTrace } from '../src/simulation.ts';
 import { environment, ms, stats, writeResult } from './lib.ts';
 
@@ -118,6 +120,54 @@ const wider = [{ k, t }, ...WIDER_K.map((wk) => ({ k: wk, t: privacyThreshold(N,
   return { ...c, cells };
 });
 
+// Graph structure. The coordinator's F (finalSet over the meters that dealt) decides whether an honest round publishes,
+// so it is computed directly here. The random Harary graph joins each meter to its k/2 nearest ring positions on each
+// side; the alternative joins it to k/2 random offsets on the same shuffled ring, so neighbourhoods do not overlap
+// locally. Both give every meter k neighbours forming a uniformly random k-subset.
+const STRUCTURE_RATES = [0.2, 0.25, 0.3, 0.35];
+const STRUCTURE_TRIALS = 40;
+function circulant(k: number): Map<MeterId, MeterId[]> {
+  const ring = [...ids];
+  for (let i = ring.length - 1; i > 0; i--) {
+    const j = Math.floor(uniform() * (i + 1));
+    [ring[i], ring[j]] = [ring[j]!, ring[i]!];
+  }
+  const offsets = new Set<number>();
+  while (offsets.size < k / 2) offsets.add(1 + Math.floor(uniform() * Math.floor((N - 1) / 2)));
+  const adj = new Map(ids.map((id) => [id, [] as MeterId[]]));
+  for (let p = 0; p < N; p++) {
+    for (const d of offsets) {
+      const [a, b] = [ring[p]!, ring[(p + d) % N]!];
+      adj.get(a)!.push(b);
+      adj.get(b)!.push(a);
+    }
+  }
+  return adj;
+}
+const finalOf = (graph: Map<MeterId, readonly MeterId[]>, active: Set<MeterId>) =>
+  finalSet([...active].filter((i) => graph.get(i)!.filter((j) => active.has(j)).length >= t), graph, t);
+const structures = (['random Harary (used)', 'random circulant'] as const).map((name) => {
+  const graph = () => (name === 'random circulant' ? circulant(k) : harary(ids, k, randomBytes(32)));
+  const cells = STRUCTURE_RATES.map((rate) => {
+    let included = 0;
+    let reporters = 0;
+    for (let s = 0; s < STRUCTURE_TRIALS; s++) {
+      const active = new Set(ids.filter(() => uniform() >= rate));
+      included += finalOf(graph(), active).size;
+      reporters += active.size;
+    }
+    return { rate, included: included / reporters };
+  });
+  let kept = 0;
+  for (let s = 0; s < STRUCTURE_TRIALS; s++) {
+    const g2 = graph();
+    const gone = new Set(g2.get(ids[0]!)!.slice(0, k - t + 1));
+    kept += finalOf(g2, new Set(ids.filter((id) => !gone.has(id)))).size / (N - gone.size);
+  }
+  console.log(`[e4] ${name}: ${cells.map((c) => `${c.rate * 100}% -> ${(c.included * 100).toFixed(1)}%`).join(', ')}; targeted ${(kept / STRUCTURE_TRIALS * 100).toFixed(1)}%`);
+  return { name, cells, targeted: kept / STRUCTURE_TRIALS };
+});
+
 const seconds = ((performance.now() - started) / 1000).toFixed(1);
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
 const md = [
@@ -173,6 +223,22 @@ const md = [
   ...wider.map((w) => `| ${w.k} | ${w.t} | ${w.cells.map((c) => `${c.published}/${WIDER_ROUNDS}, ${pct(c.included)}`).join(' | ')} |`),
   '',
   'Every published total in this table is exact: ' + String(wider.every((w) => w.cells.every((c) => c.exact === c.published))) + '.',
+  '',
+  '## Graph structure',
+  '',
+  `The final set F must give each member t neighbours in F, so losing meters can cascade. On the random Harary graph ` +
+    'neighbours of neighbours overlap, so a dense hole spreads round the ring; a random circulant graph (same shuffled ' +
+    `ring, k/2 random offsets instead of the nearest k/2) has the same degree and the same uniformly random ` +
+    `neighbourhoods without that overlap. k = ${k}, t = ${t}, ${STRUCTURE_TRIALS} trials per cell; reporters kept in F, ` +
+    `computed with the coordinator's own \`finalSet\`. "Targeted" drops ${k - t + 1} of one meter's ${k} neighbours, just ` +
+    'enough to leave it out.',
+  '',
+  `| graph | ${STRUCTURE_RATES.map((r) => `${r * 100}% dropout`).join(' | ')} | targeted |`,
+  `|---|${STRUCTURE_RATES.map(() => '---').join('|')}|---|`,
+  ...structures.map((s) => `| ${s.name} | ${s.cells.map((c) => pct(c.included)).join(' | ')} | ${pct(s.targeted)} |`),
+  '',
+  "Veil keeps the random Harary graph because E7's exact partition bound is derived for it; the circulant graph would " +
+    'need its own bound.',
 ];
-writeResult('e4', md, { environment: environment(), seconds: Number(seconds), n: N, k, t, random, crash, targeted, wider });
+writeResult('e4', md, { environment: environment(), seconds: Number(seconds), n: N, k, t, random, crash, targeted, wider, structures });
 console.log(`[e4] done in ${seconds} s`);

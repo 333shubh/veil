@@ -3,83 +3,121 @@
   "homes": 240,
   "threads": 8,
   "setupPhasesMs": {
-    "devices": 364.3444,
-    "anchor": 67.46679999999998,
-    "keys": 1492.1424,
-    "keyExchange": 11396.4318,
-    "finishKeys": 20996.174
+    "devices": 399.31759999999997,
+    "anchor": 58.981899999999996,
+    "keys": 1106.2631000000001,
+    "keyExchange": 20054.8676,
+    "finishKeys": 36161.0668
   },
   "k": 54,
   "t": 33,
-  "seconds": 641.9147612999999,
-  "setupMs": 34324.585900000005,
+  "seconds": 690.369473,
+  "setupMs": 57787.8785,
   "counters": {
-    "rounds": 307,
-    "published": 307,
-    "exact": 307,
+    "rounds": 326,
+    "published": 326,
+    "exact": 326,
     "mismatches": 0,
+    "flagged": 63,
     "suppressed": 0,
     "aborted": 0
   },
   "roundMs": {
-    "n": 306,
-    "median": 1917.753000000026,
-    "p95": 2151.376799999969,
-    "mean": 1909.4111225490194,
-    "max": 2379.041900000011
+    "n": 325,
+    "median": 1781.20140000002,
+    "p95": 1927.9734999999637,
+    "mean": 1794.4953984615381,
+    "max": 2062.3795000000027
   },
   "tampers": 6,
   "tampersCaught": 6,
+  "lies": {
+    "lie": 500000,
+    "liedRounds": 60,
+    "liesFlagged": 60,
+    "cleanRounds": 265,
+    "falseAlarms": 3
+  },
+  "verified": [
+    {
+      "kind": "masked",
+      "lie": "50000",
+      "status": "aborted",
+      "liarIncluded": false,
+      "reason": "the total differs from the sum of the committed readings"
+    },
+    {
+      "kind": "claimed",
+      "lie": "50000",
+      "status": "published",
+      "liarIncluded": false,
+      "total": "9495",
+      "honest": "9495",
+      "validators": "accepted"
+    },
+    {
+      "kind": "inRange",
+      "lie": "5000",
+      "status": "published",
+      "liarIncluded": true,
+      "total": "14832",
+      "honest": "9832",
+      "validators": "accepted"
+    }
+  ],
   "collusion": [
     {
       "corrupt": 0,
       "t": 4,
-      "splits": 64,
+      "splits": 128,
       "exposed": false,
       "truth": "2345"
     },
     {
       "corrupt": 1,
       "t": 4,
-      "splits": 32,
+      "splits": 64,
       "exposed": false,
       "truth": "2345"
     },
     {
       "corrupt": 2,
       "t": 4,
-      "splits": 16,
+      "splits": 32,
       "exposed": false,
       "truth": "2345"
     },
     {
       "corrupt": 3,
       "t": 4,
-      "splits": 8,
+      "splits": 16,
       "exposed": false,
       "truth": "2345"
     },
     {
       "corrupt": 4,
       "t": 4,
-      "splits": 4,
+      "splits": 8,
       "exposed": true,
+      "by": "survivor-set",
       "guess": "2345",
       "truth": "2345"
     },
     {
       "corrupt": 5,
       "t": 4,
-      "splits": 2,
+      "splits": 4,
       "exposed": true,
+      "by": "survivor-set",
       "guess": "2345",
       "truth": "2345"
     },
     {
       "corrupt": 6,
       "t": 4,
-      "splits": 1,
+      "splits": 2,
       "exposed": true,
+      "by": "survivor-set",
       "guess": "2345",
       "truth": "2345"
     }

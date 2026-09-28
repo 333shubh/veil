@@ -1,6 +1,6 @@
 {
-  "environment": "13th Gen Intel(R) Core(TM) i5-13450HX (16 threads, pinned to logical CPU 4 (a performance core)), win32 10.0.26200, Node v22.10.0, OpenSSL 3.0.15+quic",
-  "seconds": 145,
+  "environment": "13th Gen Intel(R) Core(TM) i5-13450HX (16 threads), win32 10.0.26200, Node v22.10.0, OpenSSL 3.0.15+quic",
+  "seconds": 463.2,
   "n": 200,
   "k": 54,
   "t": 33,
@@ -8,149 +8,205 @@
     {
       "rate": 0,
       "published": 20,
+      "suppressed": 0,
       "exact": 20,
       "included": 1,
       "afterDeadline": {
         "n": 20,
-        "median": 767.2334999999839,
-        "p95": 928.5589000000255,
-        "mean": 805.5016450000007,
-        "max": 985.7194000000036
+        "median": 499.5921999999846,
+        "p95": 529.052799999994,
+        "mean": 505.423549999995,
+        "max": 577.6535999999651
       },
       "coordinator": {
         "n": 20,
-        "median": 253.6314000000002,
-        "p95": 315.10519999999815,
-        "mean": 260.3181800000005,
-        "max": 324.08439999999973
+        "median": 29.658599999995204,
+        "p95": 35.40769999999975,
+        "mean": 30.55237999999963,
+        "max": 36.918900000004214
       }
     },
     {
       "rate": 0.05,
       "published": 20,
+      "suppressed": 0,
       "exact": 20,
       "included": 1,
       "afterDeadline": {
         "n": 20,
-        "median": 731.2616000000635,
-        "p95": 817.2825000000594,
-        "mean": 742.4607699999967,
-        "max": 894.7878999999375
+        "median": 449.217799999984,
+        "p95": 519.2927999999447,
+        "mean": 460.8904200000003,
+        "max": 531.9737999999234
       },
       "coordinator": {
         "n": 20,
-        "median": 231.43769999999859,
-        "p95": 277.6054000000004,
-        "mean": 243.73796000000056,
-        "max": 296.2121000000043
+        "median": 26.05739999999423,
+        "p95": 38.65869999999995,
+        "mean": 29.11158499999965,
+        "max": 39.834200000004785
       }
     },
     {
       "rate": 0.1,
       "published": 20,
+      "suppressed": 0,
       "exact": 20,
       "included": 1,
       "afterDeadline": {
         "n": 20,
-        "median": 641.7474000000293,
-        "p95": 697.5055999999677,
-        "mean": 649.8561100000206,
-        "max": 719.8273000000263
+        "median": 406.8322000000626,
+        "p95": 487.2585999999792,
+        "mean": 419.56063500000784,
+        "max": 509.9272999999812
       },
       "coordinator": {
         "n": 20,
-        "median": 212.4461999999985,
-        "p95": 225.8831999999893,
-        "mean": 214.0760699999999,
-        "max": 245.4673999999941
+        "median": 25.196800000012445,
+        "p95": 33.99039999998786,
+        "mean": 26.965205000002605,
+        "max": 35.28370000000723
       }
     },
     {
       "rate": 0.2,
       "published": 20,
+      "suppressed": 0,
       "exact": 20,
       "included": 1,
       "afterDeadline": {
         "n": 20,
-        "median": 546.9824999999764,
-        "p95": 654.1711000000068,
-        "mean": 568.3267150000108,
-        "max": 689.3731000000553
+        "median": 344.5179000001008,
+        "p95": 377.6065000001181,
+        "mean": 345.6228100000262,
+        "max": 380.32500000000437
       },
       "coordinator": {
         "n": 20,
-        "median": 188.80530000000726,
-        "p95": 236.49439999999595,
-        "mean": 200.13780000000006,
-        "max": 261.9687000000122
+        "median": 22.440200000004552,
+        "p95": 31.604699999996228,
+        "mean": 24.38822499999951,
+        "max": 35.32549999999901
+      }
+    },
+    {
+      "rate": 0.25,
+      "published": 18,
+      "suppressed": 2,
+      "exact": 18,
+      "included": 0.9,
+      "afterDeadline": {
+        "n": 20,
+        "median": 318.2550999999585,
+        "p95": 404.59859999999753,
+        "mean": 314.15291499998204,
+        "max": 429.3748999998861
+      },
+      "coordinator": {
+        "n": 20,
+        "median": 21.11139999999432,
+        "p95": 32.142599999991944,
+        "mean": 23.971619999998076,
+        "max": 38.986699999994016
       }
     },
     {
       "rate": 0.3,
-      "published": 20,
-      "exact": 20,
-      "included": 0.9503860065176287,
+      "published": 7,
+      "suppressed": 13,
+      "exact": 7,
+      "included": 0.35,
       "afterDeadline": {
         "n": 20,
-        "median": 434.99059999996825,
-        "p95": 461.9631000000518,
-        "mean": 425.4842549999863,
-        "max": 512.900500000098
+        "median": 174.9678999999669,
+        "p95": 344.3906000000279,
+        "mean": 215.0071100000001,
+        "max": 377.8656000000119
       },
       "coordinator": {
         "n": 20,
-        "median": 164.75410000002012,
-        "p95": 181.67919999999867,
-        "mean": 161.85807499999828,
-        "max": 184.93519999999262
+        "median": 21.594799999991665,
+        "p95": 36.94949999999517,
+        "mean": 24.141659999998957,
+        "max": 36.9968000000008
       }
     },
     {
       "rate": 0.4,
-      "published": 20,
-      "exact": 20,
-      "included": 0.5206201268952296,
+      "published": 0,
+      "suppressed": 20,
+      "exact": 0,
+      "included": 0,
       "afterDeadline": {
         "n": 20,
-        "median": 219.73449999984587,
-        "p95": 360.46539999991364,
-        "mean": 234.19732999999542,
-        "max": 369.24179999981425
+        "median": 69.65539999998873,
+        "p95": 143.41880000005767,
+        "mean": 91.06187000000827,
+        "max": 156.94299999998475
       },
       "coordinator": {
         "n": 20,
-        "median": 89.84819999999308,
-        "p95": 138.93360000000393,
-        "mean": 92.66551000000035,
-        "max": 141.57659999998577
+        "median": 16.90959999999177,
+        "p95": 27.038300000000163,
+        "mean": 18.007944999999744,
+        "max": 27.237699999997858
       }
     },
     {
       "rate": 0.5,
-      "published": 10,
-      "exact": 10,
-      "included": 0.0895782484575797,
+      "published": 0,
+      "suppressed": 20,
+      "exact": 0,
+      "included": 0,
       "afterDeadline": {
         "n": 20,
-        "median": 63.86380000009376,
-        "p95": 164.38099999990663,
-        "mean": 78.99539000001096,
-        "max": 180.7664999999106
+        "median": 35.25359999999637,
+        "p95": 65.84089999998105,
+        "mean": 43.34349500000535,
+        "max": 66.09629999999015
       },
       "coordinator": {
         "n": 20,
-        "median": 23.472200000003795,
-        "p95": 61.891499999997905,
-        "mean": 30.604719999998633,
-        "max": 67.35890000000654
+        "median": 14.184900000007474,
+        "p95": 20.933100000002014,
+        "mean": 15.093595000000642,
+        "max": 22.541999999994005
       }
     }
   ],
-  "crash": {
-    "published": 55,
-    "exact": 55,
-    "aborted": 45
-  },
+  "crash": [
+    {
+      "variant": "before confirming, and before checking",
+      "published": 51,
+      "exact": 51,
+      "aborted": 49,
+      "unmasked": 33,
+      "escrowed": 0,
+      "reasons": [
+        "meter N left no removal of its masks with meters that dropped after reporting"
+      ]
+    },
+    {
+      "variant": "before confirming, and after checking",
+      "published": 100,
+      "exact": 100,
+      "aborted": 0,
+      "unmasked": 85,
+      "escrowed": 50,
+      "reasons": []
+    },
+    {
+      "variant": "at all three points",
+      "published": 51,
+      "exact": 51,
+      "aborted": 49,
+      "unmasked": 48,
+      "escrowed": 13,
+      "reasons": [
+        "meter N left no removal of its masks with meters that dropped after reporting"
+      ]
+    }
+  ],
   "targeted": [
     {
       "dropped": 0,
@@ -183,23 +239,207 @@
     {
       "dropped": 22,
       "live": 32,
-      "status": "published",
-      "exact": true,
+      "status": "suppressed",
+      "exact": false,
       "targetIncluded": false
     },
     {
       "dropped": 23,
       "live": 31,
-      "status": "published",
-      "exact": true,
+      "status": "suppressed",
+      "exact": false,
       "targetIncluded": false
     },
     {
       "dropped": 54,
       "live": 0,
-      "status": "published",
-      "exact": true,
+      "status": "suppressed",
+      "exact": false,
       "targetIncluded": false
+    }
+  ],
+  "wider": [
+    {
+      "k": 54,
+      "t": 33,
+      "cells": [
+        {
+          "rate": 0.2,
+          "published": 10,
+          "exact": 10,
+          "included": 1,
+          "afterDeadline": 503.3362000004854
+        },
+        {
+          "rate": 0.3,
+          "published": 4,
+          "exact": 4,
+          "included": 0.4,
+          "afterDeadline": 178.28479999984847
+        },
+        {
+          "rate": 0.4,
+          "published": 0,
+          "exact": 0,
+          "included": 0,
+          "afterDeadline": 114.8905999995768
+        },
+        {
+          "rate": 0.5,
+          "published": 0,
+          "exact": 0,
+          "included": 0,
+          "afterDeadline": 48.264500000106636
+        }
+      ]
+    },
+    {
+      "k": 80,
+      "t": 41,
+      "cells": [
+        {
+          "rate": 0.2,
+          "published": 10,
+          "exact": 10,
+          "included": 1,
+          "afterDeadline": 707.9748000000836
+        },
+        {
+          "rate": 0.3,
+          "published": 10,
+          "exact": 10,
+          "included": 1,
+          "afterDeadline": 549.7291000001132
+        },
+        {
+          "rate": 0.4,
+          "published": 7,
+          "exact": 7,
+          "included": 0.7,
+          "afterDeadline": 388.6946000002208
+        },
+        {
+          "rate": 0.5,
+          "published": 0,
+          "exact": 0,
+          "included": 0,
+          "afterDeadline": 139.61749999958556
+        }
+      ]
+    },
+    {
+      "k": 120,
+      "t": 61,
+      "cells": [
+        {
+          "rate": 0.2,
+          "published": 10,
+          "exact": 10,
+          "included": 1,
+          "afterDeadline": 1020.7007000004523
+        },
+        {
+          "rate": 0.3,
+          "published": 10,
+          "exact": 10,
+          "included": 1,
+          "afterDeadline": 736.4865999998874
+        },
+        {
+          "rate": 0.4,
+          "published": 8,
+          "exact": 8,
+          "included": 0.8,
+          "afterDeadline": 571.4536999997799
+        },
+        {
+          "rate": 0.5,
+          "published": 1,
+          "exact": 1,
+          "included": 0.1,
+          "afterDeadline": 185.39839999983087
+        }
+      ]
+    },
+    {
+      "k": 199,
+      "t": 100,
+      "cells": [
+        {
+          "rate": 0.2,
+          "published": 10,
+          "exact": 10,
+          "included": 1,
+          "afterDeadline": 1443.800399999891
+        },
+        {
+          "rate": 0.3,
+          "published": 10,
+          "exact": 10,
+          "included": 1,
+          "afterDeadline": 1135.1401000001351
+        },
+        {
+          "rate": 0.4,
+          "published": 10,
+          "exact": 10,
+          "included": 1,
+          "afterDeadline": 913.860699999379
+        },
+        {
+          "rate": 0.5,
+          "published": 4,
+          "exact": 4,
+          "included": 0.4,
+          "afterDeadline": 72.38720000028843
+        }
+      ]
+    }
+  ],
+  "structures": [
+    {
+      "name": "random Harary (used)",
+      "cells": [
+        {
+          "rate": 0.2,
+          "included": 0.9768694550063372
+        },
+        {
+          "rate": 0.25,
+          "included": 0.7854873766928607
+        },
+        {
+          "rate": 0.3,
+          "included": 0.43831692032229186
+        },
+        {
+          "rate": 0.35,
+          "included": 0.10981218857799924
+        }
+      ],
+      "targeted": 0
+    },
+    {
+      "name": "random circulant",
+      "cells": [
+        {
+          "rate": 0.2,
+          "included": 1
+        },
+        {
+          "rate": 0.25,
+          "included": 0.879713046379713
+        },
+        {
+          "rate": 0.3,
+          "included": 0.389334760121277
+        },
+        {
+          "rate": 0.35,
+          "included": 0.027304415182029435
+        }
+      ],
+      "targeted": 0.9943820224719102
     }
   ]
 }

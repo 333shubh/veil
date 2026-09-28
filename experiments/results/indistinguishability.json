@@ -1,10 +1,10 @@
 {
-  "environment": "13th Gen Intel(R) Core(TM) i5-13450HX (16 threads, pinned to logical CPU 4 (a performance core)), win32 10.0.26200, Node v22.10.0, OpenSSL 3.0.15+quic",
-  "seconds": 67.7,
+  "environment": "13th Gen Intel(R) Core(TM) i5-13450HX (16 threads), win32 10.0.26200, Node v22.10.0, OpenSSL 3.0.15+quic",
+  "seconds": 68.8,
   "seed": "veil indistinguishability seed 1",
   "view": {
-    "accuracy": 0.48,
-    "ci": 0.05653504399927535,
+    "accuracy": 0.54,
+    "ci": 0.05639897871415758,
     "test": 300
   },
   "control": {

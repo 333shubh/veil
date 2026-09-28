@@ -1,32 +1,32 @@
 {
-  "environment": "13th Gen Intel(R) Core(TM) i5-13450HX (16 threads, pinned to logical CPU 0 (a performance core)), win32 10.0.26200, Node v22.10.0, OpenSSL 3.0.15+quic",
-  "seconds": 115.2,
+  "environment": "13th Gen Intel(R) Core(TM) i5-13450HX (16 threads), win32 10.0.26200, Node v22.10.0, OpenSSL 3.0.15+quic",
+  "seconds": 94.3,
   "rows": [
     {
       "n": 50,
       "sparse": {
         "k": 32,
         "t": 17,
-        "setupMs": 1979.0693,
+        "setupMs": 1998.6416999999997,
         "setupBytes": 80808,
-        "meterMs": 1.7257708000000256,
-        "coordinatorMs": 29.02516000000014,
-        "roundBytes": 7512.000000000017
+        "meterMs": 1.8270412000000125,
+        "coordinatorMs": 9.890759999999954,
+        "roundBytes": 8445.999999999947
       },
       "complete": {
         "k": 49,
         "t": 25,
-        "setupMs": 3075.5273999999995,
+        "setupMs": 2722.479,
         "setupBytes": 123036,
-        "meterMs": 2.374285599999999,
-        "coordinatorMs": 42.68700000000008,
-        "roundBytes": 11166.99999999993
+        "meterMs": 2.2151508000000026,
+        "coordinatorMs": 8.175600000000305,
+        "roundBytes": 12763.99999999996
       },
       "ratio": {
-        "setup": 0.6434894060771497,
-        "meter": 0.7268589760221038,
-        "coordinator": 0.6799531473282284,
-        "bytes": 0.6726963374227692
+        "setup": 0.7341256626772878,
+        "meter": 0.8247931472656446,
+        "coordinator": 1.2097901071480486,
+        "bytes": 0.6617047947351907
       }
     },
     {
@@ -34,26 +34,26 @@
       "sparse": {
         "k": 38,
         "t": 21,
-        "setupMs": 4751.918900000001,
+        "setupMs": 4171.3223,
         "setupBytes": 95712,
-        "meterMs": 1.7284873999998929,
-        "coordinatorMs": 65.06835999999967,
-        "roundBytes": 9201.999999999935
+        "meterMs": 1.762700799999995,
+        "coordinatorMs": 15.333800000000338,
+        "roundBytes": 9981.999999999975
       },
       "complete": {
         "k": 99,
         "t": 50,
-        "setupMs": 11896.628400000001,
+        "setupMs": 10840.9545,
         "setupBytes": 247236,
-        "meterMs": 5.322430599999767,
-        "coordinatorMs": 207.66952000000236,
-        "roundBytes": 22316.99999999985
+        "meterMs": 5.050242200000314,
+        "coordinatorMs": 14.036359999998968,
+        "roundBytes": 25475.99999999978
       },
       "ratio": {
-        "setup": 0.3994340867198979,
-        "meter": 0.32475527252529485,
-        "coordinator": 0.3133264814210527,
-        "bytes": 0.41233140655105954
+        "setup": 0.3847744495191821,
+        "meter": 0.3490329236090668,
+        "coordinator": 1.0924342208379854,
+        "bytes": 0.3918197519233812
       }
     },
     {
@@ -61,26 +61,26 @@
       "sparse": {
         "k": 54,
         "t": 33,
-        "setupMs": 13057.662200000002,
+        "setupMs": 11905.4165,
         "setupBytes": 135456,
-        "meterMs": 2.737644299999782,
-        "coordinatorMs": 213.42293999999964,
-        "roundBytes": 13441.999999999884
+        "meterMs": 2.590798299999835,
+        "coordinatorMs": 30.26564000000217,
+        "roundBytes": 14069.999999999889
       },
       "complete": {
         "k": 199,
         "t": 100,
-        "setupMs": 47659.42,
+        "setupMs": 43297.3673,
         "setupBytes": 495636,
-        "meterMs": 14.510586599999732,
-        "coordinatorMs": 1612.0842399999906,
-        "roundBytes": 44616.999999999665
+        "meterMs": 11.68446710000014,
+        "coordinatorMs": 35.88729999999923,
+        "roundBytes": 50900
       },
       "ratio": {
-        "setup": 0.273978621644997,
-        "meter": 0.18866530867882575,
-        "coordinator": 0.13238944634804004,
-        "bytes": 0.3012752986529795
+        "setup": 0.2749686006890308,
+        "meter": 0.2217301206659056,
+        "coordinator": 0.8433523837124225,
+        "bytes": 0.2764243614931216
       }
     }
   ]

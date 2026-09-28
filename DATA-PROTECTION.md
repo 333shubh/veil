@@ -4,7 +4,7 @@ A short note for a distribution utility (discom) in India considering Veil. It d
 
 ## Why it matters now
 
-India's smart-meter rollout under RDSS has 20.33 crore smart meters sanctioned, 19.79 crore of them consumer meters [S9]. A consumer meter's fine-grained readings show when a household wakes, cooks, runs its water pump or goes away: in this repository's experiment, a detector finds one home's pump switching on from its raw readings with AUC 0.991 [E5].
+India's smart-meter rollout under RDSS has 20.33 crore smart meters sanctioned, 19.79 crore of them consumer meters [S9]. A consumer meter's fine-grained readings show when a household wakes, cooks, runs its water pump or goes away: in this repository's experiment, a detector finds one home's pump switching on from its raw readings with AUC 0.990 [E5].
 
 The Digital Personal Data Protection Act, 2023 (No. 22 of 2023) governs personal data of identifiable individuals [S6], and its Rules were notified in November 2025, with most obligations commencing after 18 months [S7]. A discom that decides why and how meter data is processed would be a data fiduciary for it. Failing to take reasonable security safeguards against a breach (section 8(5)) can draw a penalty of up to ₹250 crore [S8].
 
@@ -18,7 +18,7 @@ The Digital Personal Data Protection Act, 2023 (No. 22 of 2023) governs personal
 | Billing register (energy per billing interval) | Per home | Still per home, over a separate, coarser channel |
 | Keys | Long-lived | Fresh per epoch; old epoch keys are erased and the report key is ratcheted |
 
-The operator's view of a masked home is indistinguishable from chance in the test that was run: 48.0% ± 5.7 classification accuracy between two reading vectors with the same total, against 100.0% ± 5.7 on raw readings [indist]. The pump detector falls to AUC 0.535 on a 200-home total [E5].
+The operator's view of a masked home is indistinguishable from chance in the test that was run: 54.0% ± 5.6 classification accuracy between two reading vectors with the same total, against 100.0% ± 5.7 on raw readings [indist]. The pump detector falls to AUC 0.532 on a 200-home total [E5].
 
 This is data minimisation: the high-frequency stream is reduced to what grid operations need, a feeder or transformer total. It supports the Act's security and purpose-limitation obligations; it does not remove them.
 
