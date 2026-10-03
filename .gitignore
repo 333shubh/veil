@@ -1,3 +1,4 @@
 node_modules/
 data/
 demo/dist/
+.claude/scheduled_tasks.lock
