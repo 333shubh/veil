@@ -6,6 +6,7 @@ Private neighbourhood totals for smart meters. A distribution utility reads the 
 - **[docs/rounds.md](docs/rounds.md)**: the round, message by message, and the security argument for its agreement check.
 - **[DATA-PROTECTION.md](DATA-PROTECTION.md)**: a note for a distribution utility in India.
 - **[VEIL_RESEARCH.md](VEIL_RESEARCH.md)**: the specification this build follows.
+- **[docs/roadmap.md](docs/roadmap.md)**: the remaining work before a utility could deploy Veil, item by item.
 
 ## Layout
 
