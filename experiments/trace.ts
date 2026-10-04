@@ -77,10 +77,47 @@ function units(doc: string): string[] {
   );
 }
 
+/**
+ * An HTML page: text split at block elements, with script, style and anything marked data-trace="skip" left out
+ * (chapter stamps, step numbers, live readouts filled in by code). Citations are written in the text as [E1] etc.
+ */
+const BLOCK = new Set(['p', 'li', 'h1', 'h2', 'h3', 'div', 'section', 'article', 'td', 'ul', 'ol', 'footer', 'aside', 'nav', 'main', 'header', 'table', 'tr', 'body']);
+const VOID = new Set(['br', 'img', 'input', 'meta', 'link', 'hr', 'source', 'canvas']);
+function htmlUnits(doc: string): string[] {
+  const out: string[] = [];
+  const stack: { name: string; skip: boolean }[] = [];
+  let text = '';
+  const flush = () => {
+    if (text.trim()) out.push(text.replace(/&nbsp;|&amp;|&[a-z]+;/g, ' ').replace(/\s+/g, ' '));
+    text = '';
+  };
+  const skipping = () => stack.some((e) => e.skip);
+  const body = doc
+    .replace(/<head[\s\S]*?<\/head>/, '')
+    .replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/g, '')
+    .replace(/<!--[\s\S]*?-->/g, '');
+  for (const m of body.matchAll(/<(\/)?([a-zA-Z][a-zA-Z0-9]*)([^>]*)>|([^<]+)/g)) {
+    if (m[4] !== undefined) {
+      if (!skipping()) text += m[4];
+      continue;
+    }
+    text += ' '; // a tag separates words, so "[E1]" and "0.128" never run together
+    const name = m[2]!.toLowerCase();
+    if (BLOCK.has(name)) flush();
+    if (VOID.has(name) || m[3]!.trimEnd().endsWith('/')) continue;
+    if (m[1]) {
+      const i = stack.map((e) => e.name).lastIndexOf(name);
+      if (i >= 0) stack.length = i;
+    } else stack.push({ name, skip: /data-trace="skip"/.test(m[3]!) });
+  }
+  flush();
+  return out;
+}
+
 const problems: string[] = [];
 let checkedUnits = 0;
 let checkedNumbers = 0;
-const docs = process.argv.slice(2).length ? process.argv.slice(2) : ['REPORT.md', 'DATA-PROTECTION.md'];
+const docs = process.argv.slice(2).length ? process.argv.slice(2) : ['REPORT.md', 'DATA-PROTECTION.md', 'demo/index.html'];
 const cache = new Map<string, string>();
 const textOf = (tag: string) => {
   if (!cache.has(tag)) cache.set(tag, plain(tag.startsWith('S') ? (sources.get(tag) ?? '') : read(FILES[tag]!)));
@@ -89,7 +126,7 @@ const textOf = (tag: string) => {
 
 for (const doc of docs) {
   let caption: string[] = [];
-  for (const unit of units(read(doc))) {
+  for (const unit of doc.endsWith('.html') ? htmlUnits(read(doc)) : units(read(doc))) {
     const row = unit.trimStart().startsWith('|');
     let tags = [...new Set([...unit.matchAll(TAG)].map((m) => m[1]!))];
     if (!row) caption = tags;
