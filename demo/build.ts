@@ -2,7 +2,7 @@
 // node:crypto to a shim over Web Crypto, and Buffer to the buffer package. The same bundling produces the Node soak run
 // (demo/dist/soak.mjs), so the gate exercises exactly the code the browser runs. `--serve` serves the demo on :8000.
 import { build, context, type BuildOptions, type Plugin } from 'esbuild';
-import { copyFileSync, mkdirSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -21,7 +21,7 @@ const browserCrypto: Plugin = {
 const common: BuildOptions = { bundle: true, format: 'esm', plugins: [browserCrypto], inject: [here('./shims/buffer.ts')], logLevel: 'warning' };
 
 mkdirSync(here('./dist'), { recursive: true });
-copyFileSync(here('./index.html'), here('./dist/index.html'));
+for (const page of ['index.html', 'classic.html', 'favicon.svg', 'og.jpg']) if (existsSync(here(`./${page}`))) copyFileSync(here(`./${page}`), here(`./dist/${page}`));
 await build({
   ...common,
   entryPoints: [here('./soak.ts'), here('./shard-thread.ts')],
@@ -30,7 +30,7 @@ await build({
   platform: 'node',
   external: ['node:fs', 'node:os', 'node:worker_threads'],
 });
-const browser: BuildOptions = { ...common, entryPoints: [here('./main.ts'), here('./worker.ts'), here('./shard-worker.ts')], outdir: here('./dist'), platform: 'browser', minify: true };
+const browser: BuildOptions = { ...common, entryPoints: [here('./landing.ts'), here('./main.ts'), here('./worker.ts'), here('./shard-worker.ts')], outdir: here('./dist'), platform: 'browser', minify: true };
 if (process.argv.includes('--serve')) {
   const ctx = await context(browser);
   const { port } = await ctx.serve({ servedir: here('./dist'), port: 8000 });

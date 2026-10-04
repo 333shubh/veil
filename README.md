@@ -20,7 +20,7 @@ Private neighbourhood totals for smart meters. A distribution utility reads the 
 | `src/adversary.ts` | a malicious coordinator and lying meters, for replayed attacks |
 | `src/load.ts` | household load simulator for Indian homes in summer |
 | `experiments/` | E1 to E9 and the supporting experiments; results in `experiments/results/` |
-| `demo/` | the browser demo: a Three.js city running the real protocol in workers |
+| `demo/` | the website: a scroll story told as a pop-up paper city (`demo/landing/`), ending in a live feeder of 240 meters running the real protocol in workers; `demo/classic.html` is the original control-panel demo |
 | `test/` | unit, protocol, attack, verified-mode and ledger tests, and the exactness gate |
 
 ## Run
@@ -31,10 +31,10 @@ Needs Node 22 or later.
 npm install
 npm test                  # everything but the exactness gate (about 15 s)
 npm run test:exactness    # 10,000 random rounds against an independent oracle
-npm run demo              # the demo on http://localhost:8000
+npm run demo              # the website on http://localhost:8000 (the classic demo at /classic.html)
 npm run e1                # ... e9, claims, india-dropout, load-validation, indistinguishability
 npm run demo:soak -- 600  # the demo engine for ten minutes, counting mismatches
-npm run trace             # checks that every number in the report traces
+npm run trace             # checks that every number in the report, the data-protection note and the website traces
 ```
 
 The Indian datasets (CEEW smart-meter data from Mathura and Bareilly, and the iAWE house) are not in the repository. Put them under `$VEIL_DATA`, which defaults to `~/veil-data`. Only `india-dropout` and `load-validation` read them.
