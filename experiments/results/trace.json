@@ -1,10 +1,11 @@
 {
   "docs": [
     "REPORT.md",
-    "DATA-PROTECTION.md"
+    "DATA-PROTECTION.md",
+    "demo/index.html"
   ],
-  "units": 89,
-  "numbers": 371,
+  "units": 105,
+  "numbers": 400,
   "problems": [],
   "pass": true
 }

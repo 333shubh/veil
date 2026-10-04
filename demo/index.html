@@ -3,144 +3,638 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Veil demo</title>
+<title>Veil · your neighbourhood's total, not your home's</title>
+<meta name="description" content="Veil lets a power utility read the exact total load of a neighbourhood while every home's smart-meter reading stays masked. A pop-up paper city running the real protocol in your browser.">
+<meta name="theme-color" content="#f7c053">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Veil · your neighbourhood's total, not your home's">
+<meta property="og:description" content="A pop-up paper city where 240 smart meters run a privacy-preserving secure sum, live in your browser.">
+<meta property="og:image" content="https://veil-chi-eight.vercel.app/og.jpg">
+<meta property="og:url" content="https://veil-chi-eight.vercel.app/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,400..700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #0b1020; --panel: #111830; --card: #161f3b; --line: #26314f; --text: #e6e9f2; --muted: #93a0bd;
-    --accent: #7dd3fc; --good: #4ade80; --bad: #f87171; --warn: #fbbf24;
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--text); background: var(--bg);
+    --butter: #f7c053; --butter-2: #fbd592; --brown: #7e5502; --brown-2: #a8740f;
+    --pink: #e0457e; --rose: #eb9cb4; --ink: #3d5da8; --deep: #23386e; --text: #2b2f45; --muted: #6a6f86;
+    --paper: #fffaf1; --paper-2: #f6f1e8; --pale: #d3e0e9; --red: #e9524a; --yellow: #f2c14e; --orange: #f07e3e; --green: #6f9e45;
+    --sans: "Plus Jakarta Sans", system-ui, sans-serif; --mono: "IBM Plex Mono", ui-monospace, monospace;
+    --lift: 0 1px 0 rgba(35,56,110,.14), 0 14px 30px -14px rgba(35,56,110,.45), 0 2px 6px -2px rgba(35,56,110,.18);
   }
   * { box-sizing: border-box; }
-  body { margin: 0; height: 100vh; display: grid; grid-template-columns: 1fr 400px; overflow: hidden; background: var(--bg); }
-  #stage { position: relative; min-width: 0; }
-  #stage canvas { display: block; width: 100%; height: 100%; }
-  #panel { background: var(--panel); border-left: 1px solid var(--line); overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-  h1 { font-size: 20px; margin: 0; letter-spacing: .02em; }
-  h1 span { color: var(--muted); font-weight: 400; font-size: 13px; margin-left: 6px; }
-  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
-  .muted { color: var(--muted); font-size: 12.5px; line-height: 1.45; }
-  .big { font-size: 30px; font-weight: 650; font-variant-numeric: tabular-nums; }
-  .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-  .tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; background: var(--bg); padding: 4px; border-radius: 10px; }
-  .tabs button { background: transparent; color: var(--muted); border: 0; border-radius: 7px; padding: 7px 0; font: inherit; font-size: 13px; cursor: pointer; }
-  .tabs button.on { background: var(--card); color: var(--text); box-shadow: 0 0 0 1px var(--line); }
-  button.action { background: #1d2a52; color: var(--text); border: 1px solid #34467a; border-radius: 8px; padding: 7px 10px; font: inherit; font-size: 13px; cursor: pointer; }
-  button.action:hover { background: #26366a; }
-  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 13px; }
-  td { padding: 2px 0; } td:last-child { text-align: right; }
-  .ok { color: var(--good); } .fail { color: var(--bad); } .warn { color: var(--warn); }
-  .mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12px; }
-  #masked { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px; margin: 6px 0; color: #c4b5fd; }
-  input[type=range] { width: 100%; accent-color: var(--accent); }
-  canvas.chart { width: 100%; height: 120px; display: block; }
-  #spark { height: 54px; }
-  #overlay { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(11,16,32,.82); z-index: 2; }
-  #overlay .card { max-width: 440px; }
-  #tip { position: absolute; pointer-events: none; background: rgba(17,24,48,.95); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font-size: 12px; display: none; z-index: 1; }
-  #legend { position: absolute; left: 12px; bottom: 12px; font-size: 12px; color: var(--muted); background: rgba(17,24,48,.8); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; display: flex; gap: 12px; flex-wrap: wrap; max-width: calc(100% - 24px); }
-  #legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
-  #closing { text-align: center; font-size: 15px; font-style: italic; color: var(--accent); padding: 6px 0 2px; }
+  html { scroll-behavior: smooth; }
+  html, body { overflow-x: clip; }
+  body { margin: 0; background: var(--butter-2); color: var(--text); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  ::selection { background: var(--rose); color: var(--deep); }
+  :focus-visible { outline: 2.5px solid var(--pink); outline-offset: 3px; border-radius: 6px; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .skip { position: fixed; left: 12px; top: -60px; z-index: 30; background: var(--deep); color: var(--paper); padding: 10px 14px; border-radius: 999px; font: 600 13px var(--sans); text-decoration: none; }
+  .skip:focus { top: 12px; }
+  #gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; z-index: 0; }
+  main { position: relative; z-index: 1; pointer-events: none; }
+  main a, main button, main select, main input, .slip, .panel, .ticket, .specimen, footer { pointer-events: auto; }
+
+  /* ---------- loader, like the reference's intro screen ---------- */
+  #loader { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; background: var(--butter); color: var(--brown); transition: opacity .8s ease, visibility .8s; }
+  #loader.done { opacity: 0; visibility: hidden; }
+  #loader .in { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; font: 500 15px/1.5 var(--sans); }
+  #loader .word { font: 800 44px var(--sans); letter-spacing: -.02em; }
+  .bar { width: 200px; height: 8px; background: rgba(126,85,2,.3); border-radius: 4px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--brown); border-radius: 4px; transition: width .3s ease-in; }
+
+  /* ---------- nav ---------- */
+  .nav { position: fixed; top: 0; left: 0; right: 0; z-index: 20; display: flex; align-items: center; gap: 14px; padding: 14px 22px; pointer-events: none; }
+  .nav > * { pointer-events: auto; }
+  .brand { display: flex; align-items: center; gap: 8px; color: var(--deep); text-decoration: none; font: 800 21px var(--sans); letter-spacing: -.02em; }
+  .brand .stamp-sm { font: 800 10px var(--sans); color: var(--pink); border: 1.5px solid var(--pink); border-radius: 5px; padding: 2px 5px; transform: rotate(-6deg); letter-spacing: .02em; }
+  .chapters { display: flex; gap: 2px; background: var(--butter); border-radius: 999px; padding: 4px; box-shadow: inset 0 0 0 1.5px rgba(126,85,2,.25); }
+  .chapters a { color: var(--brown); text-decoration: none; font: 600 12.5px var(--sans); padding: 6px 12px; border-radius: 999px; transition: background .25s, color .25s; }
+  .chapters a:hover { background: rgba(126,85,2,.12); }
+  .chapters a.on { background: var(--brown); color: var(--butter-2); }
+  .spacer { flex: 1; }
+  .chip { display: flex; align-items: center; gap: 8px; background: var(--paper); border-radius: 999px; padding: 7px 13px; font: 600 12px var(--sans); color: var(--deep); box-shadow: var(--lift); max-width: 290px; white-space: nowrap; }
+  .chip span { overflow: hidden; text-overflow: ellipsis; }
+  .chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--yellow); flex: none; animation: pulse 1.4s ease-in-out infinite; }
+  .chip.ready i { background: var(--green); animation: none; }
+  @keyframes pulse { 50% { transform: scale(.6); opacity: .5; } }
+  .pill { font: 700 12.5px var(--sans); color: var(--paper); background: var(--deep); border: 0; border-radius: 999px; padding: 9px 16px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 3px 0 var(--pink); transition: transform .15s, box-shadow .15s; }
+  .pill:hover { transform: translateY(-1px); box-shadow: 0 4px 0 var(--pink); }
+  .pill:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--pink); }
+  .pill.ghost { background: var(--paper); color: var(--deep); box-shadow: inset 0 0 0 1.5px var(--deep); }
+  .pill.ghost:hover { box-shadow: inset 0 0 0 1.5px var(--deep), 0 3px 0 var(--rose); }
+  .progress { position: fixed; left: 0; right: 0; top: 0; height: 4px; z-index: 21; background: rgba(126,85,2,.18); }
+  .progress i { display: block; height: 100%; width: 0; background: var(--brown); border-radius: 0 4px 4px 0; }
+
+  /* ---------- the story: printed pieces of paper ---------- */
+  .beat-wrap { position: relative; }
+  .beat { position: sticky; top: 20vh; margin: 0 16px 0 clamp(16px, 6vw, 100px); max-width: 460px; }
+  .slip { position: relative; background: var(--paper); color: var(--text); padding: 28px 30px 26px; border-radius: 6px; box-shadow: var(--lift);
+    transform: translateY(26px) rotate(-3deg) scale(.97); opacity: 0; transition: transform .7s cubic-bezier(.2,1.4,.4,1), opacity .5s; }
+  .slip.in { transform: rotate(var(--tilt, -.8deg)); opacity: 1; }
+  .slip::before { /* a halftone corner, printed */ content: ""; position: absolute; right: 0; bottom: 0; width: 46%; height: 55%; border-radius: 0 0 6px 0; pointer-events: none;
+    background: radial-gradient(circle, rgba(61,93,168,.16) 1.1px, transparent 1.6px) 0 0 / 7px 7px;
+    -webkit-mask-image: radial-gradient(circle at 100% 100%, #000 0, transparent 70%); mask-image: radial-gradient(circle at 100% 100%, #000 0, transparent 70%); }
+  .tape { position: absolute; top: -12px; left: 50%; width: 112px; height: 26px; transform: translateX(-50%) rotate(-3deg); background: rgba(247,192,83,.72);
+    -webkit-mask-image: linear-gradient(90deg, transparent 0 3px, #000 3px calc(100% - 3px), transparent calc(100% - 3px)); box-shadow: 0 1px 2px rgba(126,85,2,.15); }
+  .kicker { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; font: 700 11.5px var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--ink); }
+  .kicker .no { font: 800 11px var(--sans); color: var(--pink); border: 1.5px solid var(--pink); border-radius: 4px; padding: 2px 6px; letter-spacing: .04em; }
+  h1, h2 { font-family: var(--sans); color: var(--deep); margin: 0 0 14px; letter-spacing: -.025em; font-weight: 800; }
+  h1 { font-size: clamp(32px, 3.3vw, 48px); line-height: 1.02; }
+  h2 { font-size: clamp(24px, 2.2vw, 31px); line-height: 1.08; }
+  .slip p { font-size: 16px; line-height: 1.62; margin: 0 0 10px; }
+  .slip p:last-child { margin-bottom: 0; }
+  .fine { font: 400 12.5px/1.55 var(--sans) !important; color: var(--muted); }
+  .src { font: 600 10.5px var(--mono); color: var(--ink); text-decoration: none; vertical-align: super; margin-left: 1px; white-space: nowrap; }
+  .src:hover { color: var(--pink); }
+  mark { background: linear-gradient(transparent 55%, rgba(242,193,78,.75) 55%); color: inherit; padding: 0 2px; }
+
+  /* the rubber stamp */
+  .stamp { position: absolute; top: 18px; right: 20px; font: 800 15px var(--sans); color: var(--pink); border: 3px double var(--pink); border-radius: 8px; padding: 6px 10px; transform: rotate(8deg); opacity: .9;
+    -webkit-mask-image: radial-gradient(circle at 30% 40%, #000 0 55%, rgba(0,0,0,.65) 70%, #000 85%); }
+  .cue { margin-top: 22px; display: inline-flex; flex-direction: column; gap: 8px; font: 500 13px var(--sans); color: var(--brown); background: var(--butter-2); border-radius: 12px; padding: 10px 14px; }
+  .cue .bar { width: 160px; height: 6px; }
+  .cue .bar i { width: 30%; animation: cue 2.2s ease-in-out infinite; }
+  @keyframes cue { 0% { transform: translateX(-100%); } 100% { transform: translateX(340%); } }
+
+  /* an offset-printed number */
+  .riso-num { position: relative; font: 800 clamp(56px, 6vw, 84px)/.95 var(--sans); letter-spacing: -.04em; color: var(--ink); margin: 2px 0 10px; text-shadow: 4px 3px 0 rgba(224,69,126,.55); }
+  .riso-num .src { font-size: 12px; letter-spacing: 0; text-shadow: none; vertical-align: top; }
+  .riso-num small { font-size: .38em; letter-spacing: 0; color: var(--pink); text-shadow: none; margin-left: 4px; }
+  .sun-dots { position: absolute; right: 22px; top: 26px; width: 92px; height: 92px; border-radius: 50%; background: radial-gradient(circle, #f35a56 1.5px, transparent 2.2px) 0 0 / 7px 7px; opacity: .55; }
+
+  /* receipts: the meter chapter, in the same thermal paper as the strip */
+  .receipt { font-family: var(--mono); background: #fff; padding: 22px 24px 26px; border-radius: 0;
+    -webkit-mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / 14px 100%, conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) 50% / 14px 100%;
+    -webkit-mask-composite: source-in; mask-composite: intersect; filter: drop-shadow(0 10px 18px rgba(35,56,110,.25)); box-shadow: none; }
+  .receipt::before { display: none; }
+  .receipt .head { display: flex; justify-content: space-between; font: 600 11px var(--mono); letter-spacing: .08em; color: var(--muted); border-bottom: 1.5px dashed rgba(43,47,69,.35); padding-bottom: 10px; margin-bottom: 14px; text-transform: uppercase; }
+  .receipt h2 { font-family: var(--sans); }
+  .receipt p { font: 400 14.5px/1.6 var(--mono); }
+  .receipt .total-line { display: flex; justify-content: space-between; border-top: 1.5px dashed rgba(43,47,69,.35); margin-top: 14px; padding-top: 10px; font: 700 13px var(--mono); color: var(--deep); }
+
+  /* an index card */
+  .index { background: var(--paper) repeating-linear-gradient(transparent 0 25px, rgba(61,93,168,.18) 25px 26px) 0 64px / 100% calc(100% - 64px) no-repeat; padding-left: 46px; }
+  .index::after { content: ""; position: absolute; left: 30px; top: 0; bottom: 0; width: 1.5px; background: rgba(224,69,126,.45); }
+  .clip { position: absolute; top: -18px; right: 34px; width: 22px; height: 58px; border: 3px solid #9aa3b8; border-radius: 12px; transform: rotate(8deg); }
+  .clip::after { content: ""; position: absolute; left: 4px; right: 4px; top: 8px; bottom: 14px; border: 3px solid #9aa3b8; border-bottom: 0; border-radius: 8px 8px 0 0; }
+
+  /* step slips */
+  .step-no { position: absolute; left: -16px; top: -16px; width: 46px; height: 46px; display: grid; place-items: center; border-radius: 50%; background: var(--pink); color: var(--paper); font: 800 18px var(--sans); box-shadow: 0 3px 0 var(--deep); }
+  .dots { display: flex; gap: 6px; margin-top: 14px; }
+  .dots i { width: 22px; height: 6px; border-radius: 3px; background: var(--pale); }
+  .dots i.on { background: var(--ink); }
+  .eq { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; font: 600 12.5px var(--mono); }
+  .eq span { background: var(--paper-2); border: 1.5px solid var(--pale); border-radius: 6px; padding: 3px 8px; color: var(--deep); }
+  .eq .plus { color: var(--pink); border-color: rgba(224,69,126,.35); }
+  .eq .noise { color: #7d5cc6; border-color: rgba(125,92,198,.35); }
+
+  /* ledger pages */
+  .ledger-page { background: #fbfaf2 repeating-linear-gradient(transparent 0 27px, rgba(111,158,69,.28) 27px 28px); border-left: 6px double rgba(111,158,69,.55); }
+  .ledger-page::before { display: none; }
+  .recorded { position: absolute; right: 18px; bottom: 16px; font: 800 13px var(--sans); color: var(--pink); border: 2.5px solid var(--pink); border-radius: 6px; padding: 4px 9px; transform: rotate(-9deg) scale(1.8); opacity: 0; transition: transform .45s cubic-bezier(.3,1.7,.5,1) .35s, opacity .3s .35s; letter-spacing: .06em; }
+  .slip.in .recorded { transform: rotate(-9deg) scale(1); opacity: .9; }
+
+  /* specimen labels for the measurements */
+  .sheet-sec { padding: 20vh clamp(16px, 6vw, 100px) 14vh; }
+  .board { max-width: 1040px; }
+  .board-head { background: var(--paper); display: inline-block; padding: 18px 24px; border-radius: 6px; box-shadow: var(--lift); margin-bottom: 22px; transform: rotate(-1deg); }
+  .board-head h2 { margin: 0; }
+  .specimens { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px 18px; }
+  .specimen { position: relative; background: var(--paper); border-radius: 6px; padding: 30px 18px 18px; box-shadow: var(--lift); transform: rotate(var(--r, 0deg)); transition: transform .3s; }
+  .specimen:hover { transform: rotate(0) translateY(-4px); }
+  .specimen .tab { position: absolute; top: -11px; left: 16px; font: 700 11px var(--mono); background: var(--butter); color: var(--brown); border-radius: 5px; padding: 4px 8px; text-decoration: none; }
+  .specimen b { display: block; font: 800 34px/1 var(--sans); letter-spacing: -.03em; color: var(--deep); margin-bottom: 10px; }
+  .specimen span { font-size: 14.5px; line-height: 1.55; }
+  .specimen .pin { position: absolute; top: 10px; right: 12px; width: 12px; height: 12px; border-radius: 50%; background: var(--red); box-shadow: inset -2px -2px 0 rgba(0,0,0,.18), 0 2px 2px rgba(0,0,0,.2); }
+
+  /* the errata slip */
+  .errata { max-width: 720px; background: var(--paper); border-radius: 4px; box-shadow: var(--lift); padding: 26px 30px; border-top: 10px solid var(--pink); transform: rotate(.6deg); }
+  .errata ul { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 12px; }
+  .errata li { position: relative; padding-left: 30px; font-size: 15.5px; line-height: 1.6; }
+  .errata li::before { content: "✕"; position: absolute; left: 0; top: 0; font: 800 15px var(--sans); color: var(--pink); }
+
+  /* the ticket into the live city */
+  .ticket { display: flex; max-width: 520px; background: var(--paper); border-radius: 12px; box-shadow: var(--lift); position: relative; overflow: hidden;
+    -webkit-mask: radial-gradient(circle 12px at calc(100% - 132px) 0, #0000 98%, #000) top / 100% 51% no-repeat, radial-gradient(circle 12px at calc(100% - 132px) 100%, #0000 98%, #000) bottom / 100% 51% no-repeat; }
+  .ticket.slip { padding: 0; }
+  .ticket .main { padding: 26px 26px 24px; flex: 1; }
+  .ticket .stub { width: 132px; border-left: 2px dashed rgba(43,47,69,.3); background: var(--butter); color: var(--brown); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; font: 800 12px var(--sans); letter-spacing: .12em; text-transform: uppercase; text-align: center; padding: 14px; }
+  .ticket .stub .code { width: 90px; height: 40px; background: repeating-linear-gradient(90deg, var(--brown) 0 2px, transparent 2px 4px, var(--brown) 4px 7px, transparent 7px 9px); opacity: .8; }
+
+  /* ---------- the live city ---------- */
+  #city { height: 100vh; position: relative; }
+  .city-ui { position: absolute; inset: 0; opacity: 0; visibility: hidden; transition: opacity .6s, visibility .6s; }
+  body.in-city .city-ui { opacity: 1; visibility: visible; }
+  .plate { position: absolute; left: 22px; top: 70px; width: 330px; background: var(--paper); border-radius: 6px; padding: 18px 20px 16px; box-shadow: var(--lift); }
+  .plate h2 { font-size: 26px; margin-bottom: 6px; }
+  .facts { display: grid; grid-template-columns: 1fr auto; gap: 4px 14px; font: 500 12.5px var(--mono); color: var(--deep); margin: 12px 0; padding: 10px 0; border-top: 1.5px dashed rgba(43,47,69,.25); border-bottom: 1.5px dashed rgba(43,47,69,.25); }
+  .facts b { font-weight: 700; text-align: right; }
+  .tour { position: absolute; left: 22px; bottom: 66px; display: flex; gap: 6px; flex-wrap: wrap; max-width: calc(100vw - 480px); }
+  .tour button { font: 700 12px var(--sans); color: var(--brown); background: var(--butter); border: 0; border-radius: 999px; padding: 8px 13px; cursor: pointer; box-shadow: inset 0 0 0 1.5px rgba(126,85,2,.25); }
+  .tour button:hover, .tour button.on { background: var(--brown); color: var(--butter-2); }
+  .legend { position: absolute; left: 22px; bottom: 22px; display: flex; gap: 14px; flex-wrap: wrap; font: 600 12px var(--sans); color: var(--deep); background: var(--paper); border-radius: 999px; padding: 8px 15px; box-shadow: var(--lift); max-width: calc(100vw - 480px); }
+  .legend i { display: inline-block; width: 11px; height: 11px; margin-right: 6px; vertical-align: -1px; border-radius: 3px; box-shadow: inset 0 0 0 1px rgba(35,56,110,.3); }
+  .zoom { position: absolute; right: 436px; bottom: 22px; display: flex; flex-direction: column; gap: 6px; }
+  .zoom button { width: 38px; height: 38px; border-radius: 50%; border: 0; background: var(--paper); color: var(--deep); font: 700 18px var(--sans); box-shadow: var(--lift); cursor: pointer; }
+
+  .panel { position: absolute; right: 18px; top: 66px; bottom: 18px; width: 400px; display: flex; flex-direction: column; background: var(--paper); border-radius: 14px; box-shadow: var(--lift); overflow: hidden; }
+  .ptabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 10px; background: var(--butter); }
+  .ptabs button { font: 700 12.5px var(--sans); color: var(--brown); background: transparent; border: 0; border-radius: 999px; padding: 8px 0; cursor: pointer; }
+  .ptabs button[aria-selected="true"] { background: var(--brown); color: var(--butter-2); }
+  .pbody { flex: 1; overflow-y: auto; padding: 16px 18px 20px; display: none; flex-direction: column; gap: 14px; }
+  .pbody.on { display: flex; }
+  .sect + .sect { border-top: 1.5px dashed rgba(43,47,69,.18); padding-top: 14px; }
+  .sh { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; font: 700 11px var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--ink); }
+  .sh span:last-child { font: 500 11.5px var(--mono); letter-spacing: 0; text-transform: none; color: var(--muted); }
+  .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--paper-2); border-radius: 999px; padding: 3px; box-shadow: inset 0 0 0 1.5px var(--pale); }
+  .seg button { font: 700 12.5px var(--sans); color: var(--deep); background: transparent; border: 0; border-radius: 999px; padding: 7px 4px; cursor: pointer; }
+  .seg button.on { background: var(--deep); color: var(--paper); }
+  .ptext { font-size: 14px; line-height: 1.55; margin: 10px 0 0; }
+  .total { font: 800 42px/1 var(--sans); letter-spacing: -.03em; color: var(--deep); font-variant-numeric: tabular-nums; }
+  .muted { color: var(--muted); font: 400 12.5px/1.5 var(--sans); }
+  .mono { font-family: var(--mono); }
+  canvas.chart { width: 100%; height: 64px; display: block; margin: 8px 0 4px; }
+  canvas.chart.tall { height: 120px; }
+  table { width: 100%; border-collapse: collapse; font: 500 12.5px var(--mono); font-variant-numeric: tabular-nums; }
+  td { padding: 3px 0; } td:last-child { text-align: right; font-weight: 700; color: var(--deep); }
+  .ok { color: #4e8a3a; font-weight: 700; } .fail { color: var(--red); font-weight: 700; } .warn { color: #b07a10; font-weight: 700; }
+  .masked { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; font: 500 11.5px var(--mono); color: #7d5cc6; margin: 6px 0; }
+  .home { background: var(--paper-2); border-radius: 12px; padding: 14px; }
+  .home h3 { margin: 0 0 4px; font: 800 18px var(--sans); color: var(--deep); }
+  .home .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+  .home .two > div { background: var(--paper); border-radius: 8px; padding: 8px 10px; }
+  .home .two .muted { font: 700 10px var(--sans); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 4px; }
+  .home canvas { width: 100%; height: 46px; display: block; }
+  .home .sealed { height: 46px; display: grid; place-items: center; font: 700 12px var(--mono); color: #7d5cc6; background: repeating-linear-gradient(45deg, rgba(125,92,198,.1) 0 6px, transparent 6px 12px); border-radius: 6px; }
+  select, input[type=range] { width: 100%; }
+  select { font: 600 13px var(--sans); color: var(--deep); background: var(--paper-2); border: 0; border-radius: 10px; padding: 9px 10px; box-shadow: inset 0 0 0 1.5px var(--pale); }
+  input[type=range] { accent-color: var(--pink); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .boot { background: var(--butter-2); color: var(--brown); border-radius: 12px; padding: 14px 16px; }
+  .boot h3 { margin: 0 0 8px; font: 800 16px var(--sans); }
+  .steps { list-style: none; margin: 10px 0; padding: 0; display: grid; gap: 6px; font: 600 13px var(--sans); }
+  .steps li { display: flex; gap: 10px; align-items: center; opacity: .5; }
+  .steps li::before { content: ""; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--brown); flex: none; }
+  .steps li.now { opacity: 1; }
+  .steps li.now::before { background: radial-gradient(var(--brown) 0 3px, transparent 4px); animation: pulse 1s infinite; }
+  .steps li.done { opacity: .9; }
+  .steps li.done::before { background: var(--brown); }
+  .switch { display: flex; align-items: center; gap: 10px; font: 600 13.5px var(--sans); color: var(--deep); cursor: pointer; }
+  .switch input { width: 18px; height: 18px; accent-color: var(--pink); }
+  .views { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .views button { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; font: 700 13px var(--sans); color: var(--deep); background: var(--paper-2); border: 0; border-radius: 10px; padding: 10px; cursor: pointer; box-shadow: inset 0 0 0 1.5px var(--pale); }
+  .views button small { font: 400 11px/1.35 var(--sans); color: var(--muted); }
+  .views button.on { box-shadow: inset 0 0 0 2px var(--pink); background: #fff; }
   .hidden { display: none !important; }
-  label.check { display: flex; gap: 8px; align-items: center; font-size: 13px; cursor: pointer; }
+  #tip { position: fixed; z-index: 12; pointer-events: none; display: none; background: var(--paper); border-radius: 8px; padding: 7px 11px; font: 500 12.5px var(--sans); color: var(--text); box-shadow: var(--lift); }
+  #tip b { color: var(--deep); }
+  #dt { position: fixed; z-index: 11; pointer-events: none; font: 700 12px var(--sans); background: var(--deep); color: var(--paper); padding: 6px 11px; border-radius: 999px; transform: translate(-50%, -150%); white-space: nowrap; opacity: 0; transition: opacity .4s; box-shadow: 0 3px 0 var(--pink); }
+  body.in-city #dt { opacity: 1; }
+
+  /* explainer tags */
+  #tags { position: fixed; inset: 0; z-index: 3; pointer-events: none; opacity: 0; transition: opacity .5s; }
+  #tags.on { opacity: 1; }
+  .tag { position: absolute; left: 0; top: 0; background: var(--paper); border-radius: 9px; padding: 6px 11px 7px; font: 500 12px/1.35 var(--sans); color: var(--text); box-shadow: var(--lift); text-align: center; white-space: nowrap; transition: opacity .3s; }
+  .tag::after { content: ""; position: absolute; left: 50%; bottom: -5px; width: 10px; height: 10px; background: var(--paper); transform: translateX(-50%) rotate(45deg); }
+  .tag .who { display: block; font: 700 9.5px var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--ink); }
+  .tag b { display: block; font: 700 17px var(--mono); color: var(--deep); }
+  .tag b.noise { color: #7d5cc6; }
+  .tag b.off { color: var(--red); }
+  .tag .sub { display: block; font-size: 10.5px; color: var(--muted); }
+  .tag .sub.ok { color: #4e8a3a; font-weight: 700; }
+  .tag.dim { opacity: .8; }
+  .tag.mask { padding: 3px 8px; font: 600 11px var(--mono); color: var(--pink); background: #fff3f7; }
+  .tag.mask::after { display: none; }
+  .tag.mask i { color: var(--muted); font-style: normal; }
+  .tag.mask.cut { color: var(--red); text-decoration: line-through; }
+  .tag.sum { padding: 10px 16px 11px; background: var(--deep); color: var(--paper); box-shadow: 0 4px 0 var(--pink), var(--lift); }
+  .tag.sum::after { background: var(--deep); }
+  .tag.sum .who { color: var(--butter-2); }
+  .tag.sum b { color: var(--paper); font-size: 22px; }
+  .tag.sum b.noise { color: #cdb9ff; }
+  .tag.sum .sub { color: rgba(255,250,241,.75); }
+  .tag.sum .sub.ok { color: #b9e39b; }
+  .tag .stamp-in { display: inline-block; margin: 6px 0 2px; border: 2px solid var(--pink); color: #ffd3e2; border-radius: 4px; padding: 2px 8px; font: 800 10.5px var(--sans); letter-spacing: .1em; text-transform: uppercase; transform: rotate(-4deg) scale(1.7); opacity: 0; transition: transform .35s cubic-bezier(.3,1.6,.5,1), opacity .25s; }
+  .tag .stamp-in.in { transform: rotate(-4deg) scale(1); opacity: 1; }
+
+  /* ---------- footer ---------- */
+  footer { position: relative; z-index: 2; background: var(--paper); padding: 56px clamp(16px, 6vw, 100px) 40px; border-top: 10px solid var(--butter); }
+  footer .cols { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 32px; max-width: 1100px; }
+  footer h3 { font: 800 14px var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--ink); margin: 0 0 12px; }
+  footer p, footer li { font-size: 14px; line-height: 1.6; }
+  footer ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+  footer a { color: var(--deep); }
+  footer .big { font: 800 30px/1.1 var(--sans); color: var(--deep); letter-spacing: -.02em; margin: 0 0 10px; }
+
+  /* no WebGL: the story still reads, over a flat printed page */
+  body.no-gl { background: var(--butter-2) radial-gradient(circle, rgba(126,85,2,.12) 1.2px, transparent 1.8px) 0 0 / 9px 9px; }
+  body.no-gl #gl, body.no-gl #city, body.no-gl #loader { display: none; }
+  .nogl-note { display: none; }
+  body.no-gl .nogl-note { display: block; margin: 0 clamp(16px, 6vw, 100px) 30px; }
+
   @media (max-width: 860px) {
-    body { grid-template-columns: 1fr; grid-template-rows: 55vh 1fr; overflow: auto; height: auto; }
-    #stage { height: 55vh; }
-    #panel { border-left: 0; border-top: 1px solid var(--line); overflow: visible; padding: 16px; }
+    .chapters, .chip { display: none; }
+    .nav { padding: 12px 14px; }
+    .beat { top: auto; bottom: 14px; margin: 0 14px; max-width: none; }
+    .beat-wrap { display: flex; flex-direction: column; justify-content: flex-end; }
+    .slip { padding: 20px 20px 18px; }
+    .slip p { font-size: 15px; line-height: 1.55; }
+    .index { padding-left: 34px; }
+    .index::after { left: 20px; }
+    .stamp { display: none; }
+    .specimens { grid-template-columns: 1fr; }
+    .ticket .stub { width: 96px; }
+    .plate { left: 10px; right: 10px; top: 58px; width: auto; padding: 12px 14px; }
+    .plate .facts, .plate .muted, .tour, .legend, .zoom { display: none; }
+    .plate h2 { font-size: 20px; margin: 0; }
+    .panel { left: 10px; right: 10px; top: auto; bottom: 10px; width: auto; height: 46vh; }
+    footer .cols { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .slip, .slip.in { transition: none; transform: none; opacity: 1; }
+    .cue .bar i, .chip i, .steps li.now::before { animation: none; }
   }
 </style>
 </head>
 <body>
-<div id="stage">
-  <div id="overlay"><div class="card"><h2>Epoch setup</h2><div id="progress" class="muted">Starting meters…</div><div id="elapsed" class="muted" style="margin-top:8px"></div>
-    <p class="muted">Every meter draws fresh X25519 and ML-KEM-768 keys, checks its neighbours' signed keys and derives a pair key with each. A deployment does this once per day; here all meters share this computer.</p></div></div>
-  <div id="tip"></div>
-  <div id="legend"></div>
-</div>
-<aside id="panel">
-  <div><h1>Veil<span>private totals for a feeder of Indian homes</span></h1></div>
+<a class="skip" href="#city">Skip the story and go to the live city</a>
+<canvas id="gl" aria-hidden="true"></canvas>
+<div id="loader" role="status" aria-live="polite" data-trace="skip"><div class="in"><span class="word">Veil</span><span id="loadText">printing the city…</span><div class="bar"><i id="loadBar"></i></div><span>scroll to open the book</span></div></div>
+<div class="progress" aria-hidden="true"><i id="progress"></i></div>
+<div id="tags" aria-hidden="true"></div>
 
-  <div class="tabs" id="tabs">
-    <button data-mode="raw">Raw</button><button data-mode="veil" class="on">Veil</button><button data-mode="operator">Operator</button><button data-mode="audit">Audit</button>
-  </div>
-  <div class="muted" id="modeText"></div>
+<nav class="nav" aria-label="Chapters" data-trace="skip">
+  <a class="brand" href="#cover">Veil <span class="stamp-sm">No. 01</span></a>
+  <span class="chapters"><a href="#cover" data-ch="cover">Cover</a><a href="#meter" data-ch="meter">The meter</a><a href="#why" data-ch="why">Why</a><a href="#how" data-ch="how">How it works</a><a href="#proof" data-ch="proof">Proof</a><a href="#city" data-ch="city">Live city</a></span>
+  <span class="spacer"></span>
+  <span class="chip" id="chip"><i></i><span id="chipText">Setting up meters</span></span>
+  <a class="pill" href="#city">Live city →</a>
+</nav>
 
-  <div class="card">
-    <div class="row"><h2>Transformer total</h2><span class="muted" id="clock"></span></div>
-    <div class="row"><span class="big" id="total">—</span><span class="muted" id="included"></span></div>
-    <canvas class="chart" id="spark"></canvas>
-    <div class="muted" id="status"></div>
-  </div>
+<main>
+  <p class="nogl-note slip in" data-trace="skip"><b>This browser can't draw the 3D city</b> (it needs WebGL 2). The story below still reads in full; for the live demo, try a recent desktop browser.</p>
 
-  <div class="card">
-    <h2>Invariant check</h2>
-    <div id="invariant" class="muted"></div>
-    <table id="counters"></table>
-  </div>
+  <section id="cover" aria-label="Cover">
+    <div class="beat-wrap" style="height:185vh"><div class="beat"><article class="slip" style="--tilt:-1.2deg">
+      <span class="tape" aria-hidden="true"></span>
+      <span class="stamp" aria-hidden="true" data-trace="skip">No. 01</span>
+      <p class="kicker">A pop-up book about the grid</p>
+      <h1>Your neighbourhood's total.<br>Not your home's.</h1>
+      <p>Veil lets a power utility read the exact load of a neighbourhood every 5 seconds<a class="src" href="https://github.com/333shubh/veil/blob/main/src/params.ts">[params]</a>, while every home's own reading stays masked.</p>
+      <div class="cue" aria-hidden="true">scroll to open the book<div class="bar"><i></i></div></div>
+    </article></div></div>
+    <div class="beat-wrap" style="height:150vh"><div class="beat"><article class="slip" style="--tilt:1deg">
+      <span class="sun-dots" aria-hidden="true"></span>
+      <p class="kicker">The scale</p>
+      <div class="riso-num">20.33<small>crore</small><a class="src" href="https://github.com/333shubh/veil/blob/main/docs/sources.md">[S9]</a></div>
+      <p>smart meters have been sanctioned under India's RDSS scheme. Each one tells the utility how much power a home draws through the day.</p>
+      <p>Somewhere in this city, inside the pink dashed line, <mark>240 homes share one transformer</mark><a class="src" href="https://github.com/333shubh/veil/blob/main/demo/engine.ts">[demo]</a>. This is their story.</p>
+    </article></div></div>
+  </section>
 
-  <div class="card" id="operatorCard">
-    <h2>Operator view</h2>
-    <div class="muted">Masked reports as the coordinator receives them (first 14 of <span id="maskedCount">0</span>):</div>
-    <div id="masked" class="mono"></div>
-    <div class="muted">Summed and unmasked after recovery: <b id="decoded" style="color:var(--text)">—</b></div>
-  </div>
+  <section id="meter" aria-label="The meter">
+    <div class="beat-wrap" style="height:140vh"><div class="beat"><article class="slip receipt">
+      <div class="head" data-trace="skip"><span>Meter board · block 5</span><span>1 of 24</span></div>
+      <p class="kicker"><span class="no" data-trace="skip">02</span> The meter</p>
+      <h2>Meet <span class="hero-room" data-trace="skip">flat 101</span>.</h2>
+      <p data-trace="skip">Its smart meter hangs on the board at the foot of the stairs, with the meters of the other 23 flats in the block. The pink one is <span class="hero-room">flat 101</span>'s.</p>
+    </article></div></div>
+    <div class="beat-wrap" style="height:170vh"><div class="beat"><article class="slip receipt">
+      <div class="head"><span>Reading log</span><span>printing…</span></div>
+      <h2>A reading goes to the utility.</h2>
+      <p>Each one says how much power the flat drew since the last. Keep scrolling and the meter prints a whole day of them onto the street.</p>
+    </article></div></div>
+    <div class="beat-wrap" style="height:150vh"><div class="beat"><article class="slip receipt">
+      <div class="head"><span>Read the strip</span><span>one day</span></div>
+      <h2>A day of readings is a diary.</h2>
+      <p id="diary">The appliances show up on their own.</p>
+      <p>From readings like these you can tell when a household wakes, cooks, goes out and comes home.</p>
+    </article></div></div>
+    <div class="beat-wrap" style="height:130vh"><div class="beat"><article class="slip receipt">
+      <div class="head"><span>The catch</span><span>* * *</span></div>
+      <h2>The utility doesn't need the diary.</h2>
+      <p>To plan load and catch overloads on a transformer, it needs <mark>one number: the total</mark> of the homes behind it. Today it receives every home's readings anyway.</p>
+      <div class="total-line"><span>WHAT IT NEEDS</span><span>Σ, NOT EACH</span></div>
+      <p class="fine" style="margin-top:12px">The strip is one simulated home from Veil's load simulator, whose group statistics match CEEW smart-meter data from Uttar Pradesh<a class="src" href="https://github.com/333shubh/veil/blob/main/experiments/results/load-validation.md">[load]</a>.</p>
+    </article></div></div>
+  </section>
 
-  <div class="card">
-    <h2>Unplug a meter</h2>
-    <div class="muted">Click a house to unplug it or plug it back in. The round goes on without it: its neighbours release what cancels its masks, and the total covers the homes that reported.</div>
-    <table id="recovery" style="margin-top:6px"></table>
-  </div>
+  <section id="why" aria-label="Why not just encrypt it">
+    <div class="beat-wrap" style="height:165vh"><div class="beat"><article class="slip index" style="--tilt:-1.5deg">
+      <span class="clip" aria-hidden="true"></span>
+      <p class="kicker"><span class="no" data-trace="skip">03</span> Why not just encrypt it?</p>
+      <h2>Encryption hides the road, not the destination.</h2>
+      <p>Readings are already encrypted on their way. But the utility holds the key, so on its servers every reading is back in the clear, ready to be stored, analysed or shared.</p>
+      <p>Removing names doesn't help much either: the utility still has to know which meter sits behind which transformer.</p>
+      <p>And the stakes are real. Under India's data protection law, failing to safeguard personal data can cost up to <mark>₹250 crore</mark><a class="src" href="https://github.com/333shubh/veil/blob/main/docs/sources.md">[S8]</a>.</p>
+    </article></div></div>
+  </section>
 
-  <div class="card">
-    <h2>Collusion</h2>
-    <div class="muted">A separate group of 16 homes (k = 6, t = 4). The coordinator corrupts some of a target's 6 neighbours and runs the survivor-set attack over every split of the rest.</div>
-    <input type="range" id="collude" min="0" max="6" value="0">
-    <div class="row"><span id="colludeLabel">0 of 6 neighbours corrupt</span><span id="colludeResult" class="muted"></span></div>
-  </div>
+  <section id="how" aria-label="How Veil works">
+    <div class="beat-wrap" style="height:125vh"><div class="beat"><article class="slip">
+      <span class="step-no" aria-hidden="true" data-trace="skip">0</span>
+      <p class="kicker"><span class="no" data-trace="skip">04</span> How Veil works</p>
+      <h2>Five neighbours, five readings.</h2>
+      <p>Take five houses on this lane. Each meter has its reading for the round, shown on its tag.</p>
+      <div class="dots" aria-hidden="true"><i class="on"></i><i></i><i></i><i></i></div>
+    </article></div></div>
+    <div class="beat-wrap" style="height:125vh"><div class="beat"><article class="slip" style="--tilt:.8deg">
+      <span class="step-no" aria-hidden="true" data-trace="skip">1</span>
+      <p class="kicker">Neighbours share secret masks</p>
+      <h2>One adds it, one takes it away.</h2>
+      <p>Every pair of neighbours agrees a random number. One adds it to its reading, the other subtracts it. No one else knows it.</p>
+      <div class="eq" aria-hidden="true"><span>reading</span><span class="plus">+ mask</span><span class="plus">− mask</span></div>
+      <div class="dots" aria-hidden="true"><i class="on"></i><i class="on"></i><i></i><i></i></div>
+    </article></div></div>
+    <div class="beat-wrap" style="height:125vh"><div class="beat"><article class="slip" style="--tilt:-.6deg">
+      <span class="step-no" aria-hidden="true" data-trace="skip">2</span>
+      <p class="kicker">Each meter sends noise</p>
+      <h2>What leaves the house means nothing alone.</h2>
+      <p>A report is the reading plus its masks. On its own it tells the utility nothing about the home.</p>
+      <div class="eq" aria-hidden="true"><span>reading + masks</span><span class="noise">= noise</span></div>
+      <div class="dots" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></div>
+    </article></div></div>
+    <div class="beat-wrap" style="height:145vh"><div class="beat"><article class="slip" style="--tilt:.6deg">
+      <span class="step-no" aria-hidden="true" data-trace="skip">3</span>
+      <p class="kicker">The sum is exact</p>
+      <h2>Every mask meets its opposite.</h2>
+      <p>The utility adds the reports. The masks cancel and vanish, leaving the true total, to the watt.</p>
+      <div class="eq" aria-hidden="true"><span>Σ reports</span><span class="plus">masks cancel</span><span>= Σ readings</span></div>
+      <div class="dots" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></div>
+      <p class="fine" data-trace="skip" style="margin-top:12px">Illustrative: 5 houses, 2 neighbours each, 4-digit masks, real simulated readings.</p>
+      <p class="fine">Veil runs 240 homes with 54 neighbours each<a class="src" href="https://github.com/333shubh/veil/blob/main/experiments/results/demo-soak.md">[soak]</a> and fresh masks every round, all sums mod 2^64<a class="src" href="https://github.com/333shubh/veil/blob/main/docs/rounds.md">[rounds]</a>.</p>
+    </article></div></div>
+  </section>
 
-  <div class="card">
-    <h2>Lying meter</h2>
-    <div class="muted">Masking hides each reading, so a meter can report anything. By default the operator runs plausibility checks on each total; they catch only large lies.</div>
-    <div class="row" style="margin:8px 0">
-      <select id="lieSize" class="action"><option value="5000">+5 kW</option><option value="50000">+50 kW</option><option value="500000">+500 kW</option></select>
-      <button class="action" id="lie">A random home lies</button><button class="action" id="honest">Stop</button>
+  <section id="drop" aria-label="When a meter drops">
+    <div class="beat-wrap" style="height:130vh"><div class="beat"><article class="slip ledger-page">
+      <p class="kicker"><span class="no" data-trace="skip">05</span> When a meter drops</p>
+      <h2>Meters go offline. Rounds go on.</h2>
+      <p>If a house misses the round, the masks it shared don't cancel, and the sum turns to noise.</p>
+    </article></div></div>
+    <div class="beat-wrap" style="height:150vh"><div class="beat"><article class="slip ledger-page">
+      <p class="kicker">Recovery</p>
+      <h2>Its neighbours fix the sum.</h2>
+      <p>They release just what cancels the masks they shared with it, and the utility gets the exact total of everyone who reported.</p>
+      <p>Releases happen only after the meters agree on who reported, and unmasking a home takes t of its k neighbours. In the attacks we ran, fewer than t colluding neighbours learned nothing<a class="src" href="https://github.com/333shubh/veil/blob/main/test/attacks.test.ts">[attacks]</a>.</p>
+      <p class="fine">Veil is built for 10% of meters missing a round<a class="src" href="https://github.com/333shubh/veil/blob/main/src/params.ts">[params]</a>, above the 8.9% and 6.9% daily loss measured on meters in Mathura and Bareilly<a class="src" href="https://github.com/333shubh/veil/blob/main/experiments/results/india-dropout.md">[dropout]</a>.</p>
+    </article></div></div>
+  </section>
+
+  <section id="ledger" aria-label="The ledger">
+    <div class="beat-wrap" style="height:150vh"><div class="beat"><article class="slip ledger-page">
+      <p class="kicker"><span class="no" data-trace="skip">06</span> Keeping the utility honest</p>
+      <h2>Every total goes on a ledger.</h2>
+      <p>The utility signs each total with the evidence behind it, and a group of validators each keep a copy. A second, different total for the same round is refused, and an auditor can recompute any total from the signed evidence.</p>
+      <span class="recorded" aria-hidden="true">Recorded</span>
+    </article></div></div>
+  </section>
+
+  <section id="proof" class="sheet-sec" aria-label="Measured results">
+    <div class="board">
+      <div class="board-head"><p class="kicker"><span class="no" data-trace="skip">07</span> Measured, not promised</p><h2>What the experiments say.</h2></div>
+      <div class="specimens">
+        <div class="specimen" style="--r:-1.2deg"><a class="tab" href="https://github.com/333shubh/veil/blob/main/test/exactness.test.ts">[exactness]</a><i class="pin" aria-hidden="true"></i><b>10,000</b><span>random rounds checked against an independent oracle. Every published total was exact.</span></div>
+        <div class="specimen" style="--r:.9deg"><a class="tab" href="https://github.com/333shubh/veil/blob/main/experiments/results/e1.md">[E1]</a><i class="pin" aria-hidden="true"></i><b>0.128 ms</b><span>to mask one report, against 8.198 ms for a Paillier-2048 encryption on the same machine.</span></div>
+        <div class="specimen" style="--r:-.5deg"><a class="tab" href="https://github.com/333shubh/veil/blob/main/experiments/results/e1.md">[E1]</a><i class="pin" aria-hidden="true"></i><b>32 bytes</b><span>per report, small enough for the narrowest meter link.</span></div>
+        <div class="specimen" style="--r:1.1deg"><a class="tab" href="https://github.com/333shubh/veil/blob/main/experiments/results/e5.md">[E5]</a><i class="pin" aria-hidden="true"></i><b>0.990 → 0.532</b><span>a water-pump detector's AUC on one home, then on a total of 200 homes. A coin toss would do as well.</span></div>
+        <div class="specimen" style="--r:-.8deg"><a class="tab" href="https://github.com/333shubh/veil/blob/main/experiments/results/indistinguishability.md">[indist]</a><i class="pin" aria-hidden="true"></i><b>54.0%</b><span>a classifier's score at telling two sets of readings with the same total apart from what the coordinator sees, against 100.0% on raw readings.</span></div>
+        <div class="specimen" style="--r:.6deg"><a class="tab" href="https://github.com/333shubh/veil/blob/main/experiments/results/e3.md">[E3]</a><i class="pin" aria-hidden="true"></i><b>295.4 ms</b><span>for the coordinator's round with 2000 meters, growing almost linearly.</span></div>
+      </div>
     </div>
-    <div id="lieOut" class="muted">No home is lying.</div>
-    <div class="muted" style="margin-top:10px">Verified mode, on a separate group of 16 homes: each report carries a commitment and a range proof (−32,768 to 32,767 W), and each total must equal the sum of the commitments. One home lies:</div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0">
-      <button class="action" data-lie="masked">in its masked value only</button>
-      <button class="action" data-lie="claimed">claims +50 kW</button>
-      <button class="action" data-lie="inRange">claims +5 kW</button>
+  </section>
+
+  <section id="limits" class="sheet-sec" style="padding-top:4vh" aria-label="Limits">
+    <div class="errata">
+      <p class="kicker"><span class="no" data-trace="skip">08</span> Errata</p>
+      <h2>What it doesn't do.</h2>
+      <ul>
+        <li><b>A lying meter is caught only in part.</b> Plausibility checks catch a sudden lie of 20 kW or more<a class="src" href="https://github.com/333shubh/veil/blob/main/experiments/results/e9.md">[E9]</a>. Verified mode catches out-of-range lies, but a false reading inside the range still passes.</li>
+        <li><b>Heavy dropout stops rounds.</b> With 30% of meters missing, 7 of 20 rounds published; at 40%, none<a class="src" href="https://github.com/333shubh/veil/blob/main/experiments/results/e4.md">[E4]</a>.</li>
+        <li><b>The total still says something.</b> That is why a group needs at least 200 homes, a number set by one attack on simulated homes<a class="src" href="https://github.com/333shubh/veil/blob/main/experiments/results/e5.md">[E5]</a>.</li>
+        <li><b>Browsers are slow at this.</b> Setting up 240 meters in pure JavaScript took 57.8 s in our soak run<a class="src" href="https://github.com/333shubh/veil/blob/main/experiments/results/demo-soak.md">[soak]</a>.</li>
+      </ul>
     </div>
-    <div id="verifiedOut" class="muted"></div>
-  </div>
+  </section>
 
-  <div class="card">
-    <h2>Group size</h2>
-    <div class="muted">Experiment E5: detecting one home's water pump switching on, from the total of a group of this size.</div>
-    <input type="range" id="size" min="0" max="10" value="8">
-    <canvas class="chart" id="sizeChart"></canvas>
-    <div class="muted" id="sizeText"></div>
-  </div>
+  <section id="bridge" aria-label="Enter the live city">
+    <div class="beat-wrap" style="height:130vh"><div class="beat"><div class="ticket slip">
+      <div class="main">
+        <p class="kicker"><span class="no" data-trace="skip">09</span> Live</p>
+        <h2>Now the real thing.</h2>
+        <p>Every meter inside the dashed line runs the full protocol in your browser: keys, masks, dropouts and all. Switch views, pick a home, try to cheat.</p>
+        <p style="margin-top:16px"><a class="pill" href="#city">Enter the city</a></p>
+      </div>
+      <div class="stub" aria-hidden="true" data-trace="skip"><span>Admit one</span><span class="code"></span><span>Feeder</span></div>
+    </div></div></div>
+  </section>
 
-  <div class="card">
-    <label class="check"><input type="checkbox" id="billingOn"> <h2 style="margin:0">Billing channel</h2></label>
-    <div id="billingBox" class="hidden">
-      <div class="muted">A separate, coarse stream: one home's energy per 30 minutes, as the billing register records it. Shift-click a house to pick it.</div>
-      <canvas class="chart" id="billChart"></canvas>
+  <section id="city" aria-label="The live city">
+    <div class="city-ui">
+      <div class="plate" data-trace="skip">
+        <p class="kicker" data-trace="skip">Feeder 01 · live</p>
+        <h2>240 homes, one transformer.</h2>
+        <div class="facts" id="facts" data-trace="skip"></div>
+        <p class="muted">Drag to orbit, scroll or use + − to zoom, and click any home inside the dashed line. <a href="#footer">About &amp; sources</a></p>
+      </div>
+      <div class="tour" id="tour" aria-label="Fly to" data-trace="skip">
+        <button data-go="city">Overview</button><button data-go="feeder">The feeder</button><button data-go="old">Old city</button><button data-go="circle">The circle</button><button data-go="gardens">Gardens</button><button data-go="river">River</button>
+      </div>
+      <div class="legend" id="legend"></div>
+      <div class="zoom" data-trace="skip"><button id="zin" aria-label="Zoom in">+</button><button id="zout" aria-label="Zoom out">−</button></div>
+
+      <aside class="panel" aria-label="Control panel">
+        <div class="ptabs" role="tablist">
+          <button role="tab" aria-selected="true" data-tab="live">Live</button><button role="tab" aria-selected="false" data-tab="attack">Test it</button><button role="tab" aria-selected="false" data-tab="audit">Audit</button><button role="tab" aria-selected="false" data-tab="view">View</button>
+        </div>
+
+        <div class="pbody on" data-body="live" role="tabpanel" data-trace="skip">
+          <div class="boot" id="boot">
+            <h3>Setting up 240 meters</h3>
+            <ol class="steps" id="steps"><li>Anchoring the roster</li><li>Drawing epoch keys (X25519, ML-KEM-768)</li><li>Checking keys, encapsulating pair secrets</li><li>Deriving pair keys</li></ol>
+            <div class="muted" style="color:var(--brown)"><span id="elapsed">0 s</span> · a deployment does this once a day. The city is yours to explore meanwhile.</div>
+          </div>
+          <div class="sect">
+            <div class="sh"><span>What the utility sees</span><span id="clock"></span></div>
+            <div class="seg" id="modes"><button data-mode="raw">Today</button><button data-mode="veil" class="on">Veil</button><button data-mode="operator">Operator</button></div>
+            <p class="ptext" id="modeText"></p>
+          </div>
+          <div class="sect">
+            <div class="sh"><span>Transformer total</span><span id="included"></span></div>
+            <div class="total" id="total" aria-live="off">—</div>
+            <canvas class="chart" id="spark" aria-hidden="true"></canvas>
+            <div class="muted" id="status"></div>
+            <div class="sr" aria-live="polite" id="announce"></div>
+          </div>
+          <div class="sect">
+            <div class="sh"><span>Pick a home</span><span>or click one</span></div>
+            <select id="homeSelect" aria-label="Pick a home"><option value="-1">Choose a home…</option></select>
+            <div class="home hidden" id="homeCard" style="margin-top:10px">
+              <h3 id="homeName"></h3>
+              <div class="muted" id="homeState"></div>
+              <div class="two"><div><div class="muted">Utility sees today</div><canvas id="homeSpark" aria-hidden="true"></canvas></div><div><div class="muted">With Veil</div><div class="sealed">masked</div></div></div>
+              <div class="row"><button class="pill ghost" id="unplug">Unplug this meter</button><button class="pill ghost" id="billHome">Show its bill</button></div>
+            </div>
+          </div>
+          <div class="sect hidden" id="operatorSect">
+            <div class="sh"><span>Masked reports</span><span>first 14 of <b id="maskedCount">0</b></span></div>
+            <div class="masked" id="masked"></div>
+            <div class="muted">They look random, yet they sum exactly to the total above.</div>
+          </div>
+          <div class="sect">
+            <div class="sh"><span>Exactness</span><span>every round</span></div>
+            <div class="muted" id="invariant"></div>
+            <table id="counters"></table>
+          </div>
+        </div>
+
+        <div class="pbody" data-body="attack" role="tabpanel" data-trace="skip">
+          <div class="sect">
+            <div class="sh"><span>Collusion</span><span>16-home group, k = 6, t = 4</span></div>
+            <p class="muted">The coordinator corrupts some of a target's 6 neighbours and tries every split of the rest.</p>
+            <input type="range" id="collude" min="0" max="6" value="0" aria-label="Corrupt neighbours">
+            <div class="row" style="justify-content:space-between"><span id="colludeLabel" class="mono">0 of 6 corrupt</span><span id="colludeResult" class="muted"></span></div>
+          </div>
+          <div class="sect">
+            <div class="sh"><span>A lying meter</span><span>in the live feeder</span></div>
+            <p class="muted">Masking hides every reading, so a meter can report anything. Plausibility checks on each total catch only large lies.</p>
+            <div class="row" style="margin:8px 0"><select id="lieSize" style="width:auto"><option value="5000">+5 kW</option><option value="50000">+50 kW</option><option value="500000">+500 kW</option></select><button class="pill ghost" id="lie">A random home lies</button><button class="pill ghost" id="honest">Stop</button></div>
+            <div id="lieOut" class="muted">No home is lying.</div>
+          </div>
+          <div class="sect">
+            <div class="sh"><span>Verified mode</span><span>16-home group</span></div>
+            <p class="muted">Each report carries a commitment and a range proof, and each total must equal the sum of the commitments. One home lies:</p>
+            <div class="row" style="margin:8px 0"><button class="pill ghost" data-lie="masked">in its masked value only</button><button class="pill ghost" data-lie="claimed">claims +50 kW</button><button class="pill ghost" data-lie="inRange">claims +5 kW</button></div>
+            <div id="verifiedOut" class="muted"></div>
+          </div>
+          <div class="sect">
+            <div class="sh"><span>Why 200 homes?</span><span>experiment E5</span></div>
+            <p class="muted">How well a detector spots one home's water pump from the total of a group this size.</p>
+            <input type="range" id="size" min="0" max="10" value="8" aria-label="Group size">
+            <canvas class="chart tall" id="sizeChart" aria-hidden="true"></canvas>
+            <div class="muted" id="sizeText"></div>
+          </div>
+        </div>
+
+        <div class="pbody" data-body="audit" role="tabpanel" data-trace="skip">
+          <div class="sect">
+            <div class="sh"><span>The ledger</span><span>one total per round</span></div>
+            <p class="muted">Record the latest total, then have the utility publish a second, altered total for the same round.</p>
+            <div class="row" style="margin:8px 0"><button class="pill" id="tamper">Tamper: republish +1,000 W</button></div>
+            <div id="auditOut" class="muted"></div>
+          </div>
+          <div class="sect">
+            <div class="sh"><span>The billing channel</span><span id="billWho">pick a home</span></div>
+            <p class="muted">Bills need each home's energy, so they travel on a separate, coarse channel: one figure per 30 minutes, as the billing register records it.</p>
+            <canvas class="chart tall" id="billChart" aria-hidden="true"></canvas>
+          </div>
+          <div class="sect">
+            <div class="sh"><span>Engine</span><span id="engineInfo"></span></div>
+            <button class="pill ghost" id="pause">Pause rounds</button>
+          </div>
+        </div>
+
+        <div class="pbody" data-body="view" role="tabpanel" data-trace="skip">
+          <div class="sect">
+            <div class="sh"><span>View</span><span>like a cutaway model</span></div>
+            <div class="views" id="views">
+              <button data-view="paper" class="on">Paper<small>the whole city</small></button>
+              <button data-view="section">Section<small>fold the rest away</small></button>
+              <button data-view="explode">Explode<small>every flat a layer</small></button>
+              <button data-view="wiring">Wiring<small>a line to each home</small></button>
+              <button data-view="blueprint">Blueprint<small>just the ink</small></button>
+            </div>
+          </div>
+          <div class="sect">
+            <div class="sh"><span>Light</span><span id="lightLabel"></span></div>
+            <label class="switch"><input type="checkbox" id="followClock" checked> Follow the simulator's clock</label>
+            <input type="range" id="hour" min="360" max="1200" step="10" value="660" aria-label="Time of day" style="margin-top:10px">
+          </div>
+          <div class="sect">
+            <div class="sh"><span>Quality</span><span id="qualityLabel"></span></div>
+            <div class="seg" id="quality"><button data-q="low">Light</button><button data-q="high">Full</button></div>
+            <p class="muted" style="margin-top:8px">Light halves the resolution and the shadows, for phones and older laptops.</p>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </section>
+</main>
+
+<footer id="footer" data-trace="skip">
+  <div class="cols">
+    <div>
+      <p class="big">Veil</p>
+      <p>Private neighbourhood totals for smart meters: a double-masked secure sum over a sparse neighbour graph, with threshold recovery, an agreement check and a replicated audit ledger.</p>
+      <p class="row" style="margin-top:14px"><a class="pill" href="https://github.com/333shubh/veil">Source on GitHub</a><a class="pill ghost" href="https://github.com/333shubh/veil/blob/main/REPORT.md">Read the report</a></p>
+    </div>
+    <div>
+      <h3>Sources</h3>
+      <ul>
+        <li><a href="https://www.pib.gov.in/PressReleasePage.aspx?PRID=2222217">[S9] Ministry of Power: smart meters under RDSS</a></li>
+        <li><a href="https://ksandk.com/data-protection-and-data-privacy/penalties-adjudication-under-indias-dpdp-act-2023/">[S8] DPDP Act penalties</a></li>
+        <li><a href="https://doi.org/10.7910/DVN/GOCHJH">[S4] CEEW smart-meter data, Mathura and Bareilly</a></li>
+        <li><a href="https://iawe.github.io/">[S5] iAWE, one house in Delhi</a></li>
+        <li><a href="https://github.com/333shubh/veil/blob/main/docs/sources.md">All sources</a></li>
+      </ul>
+    </div>
+    <div>
+      <h3>More</h3>
+      <ul>
+        <li><a href="classic.html">The classic demo</a></li>
+        <li><a href="https://github.com/333shubh/veil/blob/main/docs/rounds.md">The round, message by message</a></li>
+        <li><a href="https://github.com/333shubh/veil/blob/main/DATA-PROTECTION.md">A note for Indian utilities</a></li>
+        <li>Paper-city style after <a href="https://www.mr-pandas-psychologically-safe-portfolio.com/">Mr. Panda's portfolio</a>. The city is drawn in code.</li>
+      </ul>
     </div>
   </div>
-
-  <div class="card" id="auditCard">
-    <h2>Audit</h2>
-    <div class="muted">Record the latest total on the ledger, then have the operator publish a second, altered total for the same round.</div>
-    <div style="margin:8px 0"><button class="action" id="tamper">Tamper: republish latest total +1,000 W</button></div>
-    <div id="auditOut" class="muted"></div>
-  </div>
-
-  <div class="row"><button class="action" id="pause">Pause</button><span class="muted" id="engineInfo"></span></div>
-  <div id="closing">The grid doesn't have to watch you to power you.</div>
-</aside>
-<script type="module" src="main.js"></script>
+</footer>
+<div id="tip" role="tooltip"></div>
+<div id="dt" aria-hidden="true">Transformer</div>
+<script type="module" src="landing.js"></script>
 </body>
 </html>
