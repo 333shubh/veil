@@ -3,5 +3,6 @@
   "framework": null,
   "installCommand": "npm ci",
   "buildCommand": "npm run demo:build",
-  "outputDirectory": "demo/dist"
+  "outputDirectory": "demo/dist",
+  "cleanUrls": true
 }
