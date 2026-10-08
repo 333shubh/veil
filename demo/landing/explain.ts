@@ -27,7 +27,7 @@ export class Explainer {
   private readonly ups: THREE.Mesh[] = [];
   private readonly pairs: [number, number][];
   private readonly masks: number[];
-  private readonly masked: number[];
+  private masked: number[] = [];
   private readonly mids: THREE.Vector3[] = [];
   private readonly utility: THREE.Vector3;
   private readonly threadMat = new THREE.MeshBasicMaterial({ color: C.ink, transparent: true, opacity: 0 });
@@ -38,6 +38,9 @@ export class Explainer {
   private readonly layer: HTMLElement;
   private readonly homes: { top: THREE.Vector3; label: string }[];
   private readonly readings: number[];
+  private readonly shown = new WeakMap<HTMLElement, string>();
+  /** A house the reader is changing in the story card, outlined in pink; -1 for none. */
+  hot = -1;
 
   constructor(layer: HTMLElement, homes: { top: THREE.Vector3; label: string }[], readings: number[]) {
     this.layer = layer;
@@ -47,15 +50,7 @@ export class Explainer {
     const random = rng(54);
     this.pairs = Array.from({ length: n }, (_, i) => [i, (i + 1) % n] as [number, number]);
     this.masks = this.pairs.map(() => 1000 + Math.floor(random() * 9000));
-    // in each pair the first adds the mask and the second subtracts it
-    this.masked = readings.map((r, i) => {
-      let y = r;
-      this.pairs.forEach(([a, b], p) => {
-        if (a === i) y += this.masks[p]!;
-        if (b === i) y -= this.masks[p]!;
-      });
-      return mod(y);
-    });
+    this.mask();
     const centre = homes.reduce((a, h) => a.add(h.top), new THREE.Vector3()).multiplyScalar(1 / n);
     this.utility = centre.clone().add(new THREE.Vector3(0, 7.2, -3));
 
@@ -88,6 +83,34 @@ export class Explainer {
     this.root.visible = false;
   }
 
+  /** The reading of house i, as the story's slider changes it. The masks stay; only its report changes. */
+  reading(i: number): number {
+    return this.readings[i]!;
+  }
+  setReading(i: number, watts: number): void {
+    this.readings[i] = watts;
+    this.mask();
+  }
+
+  // in each pair the first adds the mask and the second subtracts it
+  private mask(): void {
+    this.masked = this.readings.map((r, i) => {
+      let y = r;
+      this.pairs.forEach(([a, b], p) => {
+        if (a === i) y += this.masks[p]!;
+        if (b === i) y -= this.masks[p]!;
+      });
+      return mod(y);
+    });
+  }
+
+  /** innerHTML only when it changes: rewriting eleven tags every frame cost a style and layout pass each time. */
+  private html(el: HTMLElement, s: string): void {
+    if (this.shown.get(el) === s) return;
+    this.shown.set(el, s);
+    el.innerHTML = s;
+  }
+
   update(s: Stage, camera: THREE.Camera): void {
     const active = s.how >= 0 || s.drop >= 0 || s.ledger >= 0;
     this.root.visible = active;
@@ -113,16 +136,17 @@ export class Explainer {
       const el = this.tags[i]!;
       this.place(el, this.homes[i]!.top, camera, 0.6);
       const who = `<span class="who">${this.homes[i]!.label}</span>`;
-      if (i === offline) el.innerHTML = `${who}<b class="off">offline</b><span class="sub">no report this round</span>`;
-      else if (!isMasked) el.innerHTML = `${who}<b>${this.readings[i]} W</b><span class="sub">its reading</span>`;
-      else el.innerHTML = `${who}<b class="noise">${fmt(this.masked[i]!)}</b><span class="sub">${released && this.touches(i, offline) ? `releases ${this.release(i, offline)}` : 'what it sends'}</span>`;
+      if (i === offline) this.html(el, `${who}<b class="off">offline</b><span class="sub">no report this round</span>`);
+      else if (!isMasked) this.html(el, `${who}<b>${this.readings[i]} W</b><span class="sub">its reading</span>`);
+      else this.html(el, `${who}<b class="noise">${fmt(this.masked[i]!)}</b><span class="sub">${released && this.touches(i, offline) ? `releases ${this.release(i, offline)}` : 'what it sends'}</span>`);
       el.classList.toggle('dim', i === offline);
+      el.classList.toggle('hot', i === this.hot);
     }
     this.pairs.forEach(([a, b], p) => {
       const el = this.maskTags[p]!;
       el.style.opacity = String(showThreads * (isMasked && how > 0.6 ? 0.55 : 1));
       this.place(el, this.mids[p]!, camera, 0);
-      el.innerHTML = `+${fmt(this.masks[p]!)} <i>/</i> −${fmt(this.masks[p]!)}`;
+      this.html(el, `+${fmt(this.masks[p]!)} <i>/</i> −${fmt(this.masks[p]!)}`);
       el.classList.toggle('cut', offline >= 0 && (a === offline || b === offline));
     });
 
@@ -135,19 +159,24 @@ export class Explainer {
       const live = this.readings.filter((_, i) => i !== offline);
       const raw = mod(this.masked.filter((_, i) => i !== offline).reduce((a, y) => a + y, 0));
       const fixed = live.reduce((a, r) => a + r, 0);
-      sumEl.innerHTML =
+      this.html(
+        sumEl,
         offline < 0
           ? `<span class="who">The utility</span><b>${all} W</b>`
           : !released
             ? `<span class="who">The utility · 4 reports</span><b class="noise">${fmt(raw)}</b><span class="sub">masks shared with the missing house don't cancel</span>`
-            : `<span class="who">The utility · 4 reports + releases</span><b>${fixed} W</b><span class="sub ok">exact total of the 4 that reported</span>`;
+            : `<span class="who">The utility · 4 reports + releases</span><b>${fixed} W</b><span class="sub ok">exact total of the 4 that reported</span>`,
+      );
     } else if (s.ledger >= 0) {
-      sumEl.innerHTML = `<span class="who">The utility</span><b>${all} W</b><span class="stamp ${s.ledger > 0.3 ? 'in' : ''}">On the ledger · round 1</span><span class="sub">${s.ledger > 0.55 ? 'every validator holds it; a second total for round 1 is refused' : 'signed and recorded'}</span>`;
+      this.html(sumEl, `<span class="who">The utility</span><b>${all} W</b><span class="stamp-in ${s.ledger > 0.3 ? 'in' : ''}">On the ledger · round 1</span><span class="sub">${s.ledger > 0.55 ? 'every validator holds it; a second total for round 1 is refused' : 'signed and recorded'}</span>`);
     } else {
       const sum = mod(this.masked.reduce((a, y) => a + y, 0));
-      sumEl.innerHTML = summed
+      this.html(
+        sumEl,
+        summed
         ? `<span class="who">The utility adds the reports</span><b>${sum} W</b><span class="sub ok">= ${this.readings.join(' + ')}, exactly</span>`
-        : `<span class="who">The utility</span><b class="noise">${this.masked.map(fmt).join(' · ')}</b><span class="sub">five reports that mean nothing alone</span>`;
+        : `<span class="who">The utility</span><b class="noise">${this.masked.map(fmt).join(' · ')}</b><span class="sub">five reports that mean nothing alone</span>`,
+      );
     }
   }
 
@@ -165,7 +194,8 @@ export class Explainer {
   private place(el: HTMLElement, p: THREE.Vector3, camera: THREE.Camera, lift: number): void {
     this.v.copy(p).setY(p.y + lift).project(camera);
     el.style.transform = `translate(${((this.v.x + 1) / 2) * innerWidth}px, ${((1 - this.v.y) / 2) * innerHeight}px) translate(-50%, -100%)`;
-    el.style.visibility = this.v.z > 1 ? 'hidden' : 'visible';
+    const vis = this.v.z > 1 ? 'hidden' : 'visible';
+    if (el.style.visibility !== vis) el.style.visibility = vis;
   }
 }
 

@@ -4,6 +4,7 @@
 // Every number in the city panel comes from that worker; every number in the story is traced (npm run trace).
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import Lenis from 'lenis';
 import e5 from '../experiments/results/e5.json';
 import { simulateLoad } from '../src/load.ts';
 import { MIN_GROUP_SIZE } from '../src/params.ts';
@@ -44,22 +45,47 @@ const store = {
   },
 };
 const loadBar = (pct: number, text?: string) => {
-  $('loadBar').style.width = `${pct}%`;
+  $('loadBar').style.transform = `scaleX(${pct / 100})`;
   if (text) $('loadText').textContent = text;
 };
 
 // ---- Can this browser draw the city? If not, the story still reads, and nothing else starts. ----
 if (!document.createElement('canvas').getContext('webgl2')) {
-  document.body.classList.add('no-gl');
+  document.body.classList.add('no-gl', 'ready');
   for (const s of document.querySelectorAll('.slip')) s.classList.add('in');
   await new Promise(() => {});
+}
+
+// ---- The cover title lands word by word, like stickers pressed onto the page, once the book is ready ----
+{
+  let i = 0;
+  const split = (node: Node): void => {
+    for (const child of [...node.childNodes]) {
+      if (child.nodeType === Node.ELEMENT_NODE) split(child);
+      else if (child.nodeType === Node.TEXT_NODE && child.textContent!.trim()) {
+        const bits = child.textContent!.split(/(\s+)/);
+        child.replaceWith(
+          ...bits.map((bit) => {
+            if (!bit.trim()) return document.createTextNode(bit);
+            const w = document.createElement('span');
+            w.className = 'w';
+            w.style.setProperty('--i', String(i++));
+            w.textContent = bit;
+            return w;
+          }),
+        );
+      }
+    }
+  };
+  split($('coverTitle'));
 }
 
 // ---- Quality: a lighter tier for phones and small machines, overridable in the View tab or with ?quality= ----
 const asked = new URLSearchParams(location.search).get('quality') ?? store.get('veil-quality');
 const weak = matchMedia('(pointer: coarse)').matches || (navigator.hardwareConcurrency || 8) <= 4 || ((navigator as { deviceMemory?: number }).deviceMemory ?? 8) <= 4;
 const quality: 'low' | 'high' = asked === 'low' || asked === 'high' ? asked : weak ? 'low' : 'high';
-const dpr = Math.min(devicePixelRatio, quality === 'low' ? 1.25 : 2);
+const maxDpr = Math.min(devicePixelRatio, quality === 'low' ? 1.25 : 2);
+let dpr = maxDpr; // stepped down by the frame-time governor below when frames run long
 
 // ---- The engine starts at once: its key setup takes a while, and the story gives it the time. ----
 const worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
@@ -80,7 +106,7 @@ renderer.setPixelRatio(dpr);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.shadowMap.autoUpdate = false; // redrawn only while something folds, prints or the sun moves
-const riso = new Riso(renderer, quality === 'low' ? 0 : 4);
+const riso = new Riso(renderer, quality === 'low' ? 0 : 2); // the print pass inks every edge, so 2x MSAA is enough
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0xf1b98a, 150, 380);
@@ -90,7 +116,7 @@ const hemi = new THREE.HemisphereLight(0xfff3dc, 0xf2c6d2, 2.1);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffffff, 1.9);
 sun.castShadow = true;
-sun.shadow.mapSize.setScalar(quality === 'low' ? 2048 : 4096);
+sun.shadow.mapSize.setScalar(quality === 'low' ? 1024 : 2048);
 Object.assign(sun.shadow.camera, { left: -64, right: 64, top: 64, bottom: -64, near: 1, far: 260 });
 sun.shadow.bias = -0.0004;
 sun.shadow.radius = 2;
@@ -232,23 +258,38 @@ const camPos = POSES.flat!.pos.clone();
 const look = POSES.flat!.at.clone();
 
 // ---- Scroll ----
-const S = Object.fromEntries(['cover', 'meter', 'why', 'how', 'drop', 'ledger', 'proof', 'limits', 'bridge', 'city'].map((id) => [id, $(id)])) as Record<string, HTMLElement>;
-const through = (el: HTMLElement) => {
-  const r = el.getBoundingClientRect();
-  return clamp01(-r.top / Math.max(1, r.height - innerHeight));
-};
-const entering = (el: HTMLElement) => clamp01(1 - el.getBoundingClientRect().top / innerHeight);
+// Section geometry is measured once per resize, never in the frame loop: reading layout there after the loop's own
+// style writes forced the browser to lay the page out again on every frame.
+const IDS = ['cover', 'meter', 'why', 'how', 'drop', 'ledger', 'proof', 'limits', 'bridge', 'city'] as const;
+const S = Object.fromEntries(IDS.map((id) => [id, $(id)])) as Record<string, HTMLElement>;
+const geo: Record<string, { top: number; height: number }> = {};
+let viewH = innerHeight;
+let footerTop = Infinity;
+let docMax = 1;
+function measure(): void {
+  viewH = innerHeight;
+  for (const id of IDS) {
+    const r = S[id]!.getBoundingClientRect();
+    geo[id] = { top: r.top + scrollY, height: r.height };
+  }
+  footerTop = $('footer').getBoundingClientRect().top + scrollY;
+  docMax = Math.max(1, document.documentElement.scrollHeight - viewH);
+}
+measure();
+new ResizeObserver(() => measure()).observe(document.body);
+const through = (id: string) => clamp01((scrollY - geo[id]!.top) / Math.max(1, geo[id]!.height - viewH));
+const entering = (id: string) => clamp01(1 - (geo[id]!.top - scrollY) / viewH);
 function story(): { pose: Pose; p: Record<string, number> } {
   const p: Record<string, number> = {
-    cover: through(S.cover!),
-    meter: through(S.meter!),
-    why: through(S.why!),
-    how: through(S.how!),
-    drop: through(S.drop!),
-    ledger: through(S.ledger!),
-    proof: entering(S.proof!),
-    limits: entering(S.limits!),
-    city: entering(S.city!),
+    cover: through('cover'),
+    meter: through('meter'),
+    why: through('why'),
+    how: through('how'),
+    drop: through('drop'),
+    ledger: through('ledger'),
+    proof: entering('proof'),
+    limits: entering('limits'),
+    city: entering('city'),
   };
   let pose = mix(POSES.flat!, POSES.open!, ease(clamp01((p.cover! - 0.03) / 0.7)));
   for (const [id, frac] of [
@@ -314,6 +355,7 @@ function paintWindows(stage: Stage, minuteOfDay: number): void {
 
 // ---- Frame loop ----
 function resize(): void {
+  renderer.setPixelRatio(dpr);
   renderer.setSize(innerWidth, innerHeight, false);
   riso.setSize(innerWidth, innerHeight, dpr);
   camera.aspect = innerWidth / innerHeight;
@@ -322,13 +364,68 @@ function resize(): void {
 addEventListener('resize', resize);
 resize();
 
+// The frame-time governor: when frames run long for a while, render fewer pixels; when they have run at the display's
+// rate for several seconds, try more again. A step up that had to be taken back is not tried again this visit.
+const MIN_DPR = Math.min(maxDpr, 0.7);
+let govMs = 0;
+let govFrames = 0;
+let calm = 0;
+let raised = false;
+let capped = false;
+// ?fps shows the frame rate and the render scale, for checking a machine by eye
+const meter = new URLSearchParams(location.search).has('fps') ? document.body.appendChild(document.createElement('output')) : null;
+meter?.setAttribute('style', 'position:fixed;left:12px;bottom:12px;z-index:60;font:600 12px var(--mono);background:var(--deep);color:var(--paper);padding:6px 10px;border-radius:8px');
+function govern(ms: number): void {
+  if (ms > 120) return; // a hitch (a tab switch, a collection), not a trend
+  govMs += ms;
+  if (++govFrames < 40) return;
+  const avg = govMs / govFrames;
+  if (meter) meter.textContent = `${(1000 / avg).toFixed(0)} fps · ${avg.toFixed(1)} ms · scale ${dpr.toFixed(2)}`;
+  govMs = govFrames = 0;
+  if (avg > 20 && dpr > MIN_DPR) {
+    dpr = Math.max(MIN_DPR, dpr * 0.82);
+    if (raised) capped = true;
+    calm = 0;
+    resize();
+  } else if (avg < 17.8 && dpr < maxDpr && !capped) {
+    if (++calm >= 6) {
+      dpr = Math.min(maxDpr, dpr * 1.12);
+      raised = true;
+      calm = 0;
+      resize();
+    }
+  } else calm = 0;
+}
+
+// ---- Smooth scrolling: wheel and keys glide like turning a page; off for reduced motion ----
+const lenis = still ? null : new Lenis({ autoRaf: false, anchors: true, lerp: 0.1, wheelMultiplier: 0.9, prevent: (node) => interactive && node === canvas });
+$('toTop').addEventListener('click', () => (lenis ? lenis.scrollTo(0, { duration: 2.4 }) : scrollTo(0, 0)));
+
 const pointer = { x: 0, y: 0 };
+const sway = { x: 0, y: 0 };
 addEventListener('pointermove', (e) => {
   pointer.x = (e.clientX / innerWidth) * 2 - 1;
   pointer.y = (e.clientY / innerHeight) * 2 - 1;
 });
 
+// ---- Compile every program behind the loader, so nothing hitches the first time it comes into view ----
+loadBar(80, 'inking the plates…');
+{
+  const parts = [traffic.root, kites.root, wiring, explainer.root, plane.mesh, receipt.mesh];
+  const shown = parts.map((o) => o.visible);
+  for (const o of parts) o.visible = true;
+  rise.value = 1;
+  camera.position.copy(POSES.city!.pos);
+  camera.lookAt(POSES.city!.at);
+  await renderer.compileAsync(scene, camera).catch(() => undefined);
+  renderer.shadowMap.needsUpdate = true;
+  riso.render(scene, camera, 0); // also builds the shadow programs
+  parts.forEach((o, i) => (o.visible = shown[i]!));
+  rise.value = 0;
+}
+
 const clock = new THREE.Clock();
+const followClock = $<HTMLInputElement>('followClock');
 let painted = '';
 let paintedMinute = -1;
 let lastFold = [-1, -1];
@@ -336,12 +433,19 @@ let shadowFrames = 0;
 let lastPrint = -1;
 let loaded = false;
 let manualMinute = 660;
+let lastFrame = performance.now();
 const right = new THREE.Vector3();
 const target = { focus: 0, explode: 0, blueprint: 0 };
 loadBar(90, 'opening the book…');
-renderer.setAnimationLoop(() => {
+renderer.setAnimationLoop((now: number) => {
+  govern(now - lastFrame);
+  lastFrame = now;
+  lenis?.raf(now);
   const dt = Math.min(0.05, clock.getDelta());
   const time = still ? 0 : clock.elapsedTime;
+  chrome();
+  if (scrollY >= footerTop) return; // the back cover hides the whole canvas: draw nothing
+
   const s = story();
   const p = s.p;
 
@@ -366,9 +470,8 @@ renderer.setAnimationLoop(() => {
   wiring.visible = interactive && view === 'wiring';
 
   // the day: morning on the cover, evening by the last chapter; in the city, the simulator's clock or the slider
-  const storyDay = 540 + 570 * clamp01(scrollY / Math.max(1, S.city!.offsetTop));
-  const follow = $<HTMLInputElement>('followClock').checked;
-  light(interactive ? (follow && last ? last.minute : manualMinute) : storyDay);
+  const storyDay = 540 + 570 * clamp01(scrollY / Math.max(1, geo.city!.top));
+  light(interactive ? (followClock.checked && last ? last.minute : manualMinute) : storyDay);
   riso.setLook(blueprint, skyTop, skyLow, true);
 
   const standing = up > 0.95;
@@ -377,8 +480,8 @@ renderer.setAnimationLoop(() => {
   traffic.root.visible = standing && !inMeter && focus.value < 0.5;
   kites.root.visible = standing && !explaining && focus.value < 0.5;
   if (!still) {
-    traffic.update(dt);
-    kites.update(time);
+    if (traffic.root.visible) traffic.update(dt);
+    if (kites.root.visible) kites.update(time);
   }
 
   // the meter prints its day
@@ -431,29 +534,62 @@ renderer.setAnimationLoop(() => {
     const kk = 1 - Math.exp(-dt * 4.5);
     camPos.lerp(s.pose.pos, kk);
     look.lerp(s.pose.at, kk);
-    // a little parallax with the pointer, like turning a pop-up book in your hands
+    // a little parallax with the pointer, like turning a pop-up book in your hands; eased, so the book never jerks
+    const ks = 1 - Math.exp(-dt * 3);
+    sway.x += ((still ? 0 : pointer.x) - sway.x) * ks;
+    sway.y += ((still ? 0 : pointer.y) - sway.y) * ks;
     right.subVectors(look, camPos).cross(camera.up).normalize();
-    const sway = still ? 0 : 1;
-    camera.position.copy(camPos).addScaledVector(right, pointer.x * 1.4 * sway).addScaledVector(camera.up, -pointer.y * 0.8 * sway);
+    camera.position.copy(camPos).addScaledVector(right, sway.x * 1.6).addScaledVector(camera.up, -sway.y * 0.9);
     camera.lookAt(look);
   }
   plane.update(camera, look, dt, time, !interactive && !still && up > 0.5);
-  placeLabel();
-  chrome();
+  if (interactive) placeLabel();
   riso.render(scene, camera, time);
   if (!loaded) {
     loaded = true;
     loadBar(100, 'ready');
-    setTimeout(() => $('loader').classList.add('done'), 250);
+    setTimeout(() => {
+      $('loader').classList.add('done');
+      document.body.classList.add('ready');
+    }, 250);
   }
 });
 
+// ---- Chapter rail and progress: write-only, and only when they change ----
+const RAIL: [string, string][] = [
+  ['cover', 'cover'],
+  ['meter', 'meter'],
+  ['why', 'why'],
+  ['how', 'how'],
+  ['drop', 'drop'],
+  ['ledger', 'ledger'],
+  ['proof', 'proof'],
+  ['limits', 'limits'],
+  ['bridge', 'city'],
+  ['city', 'city'],
+];
+const railLinks = [...document.querySelectorAll<HTMLAnchorElement>('.rail a')];
+const progressBar = $('progress');
+let chapter = '';
+let progressShown = -1;
 function chrome(): void {
-  const mid = innerHeight / 2;
+  const mid = scrollY + viewH / 2;
   let current = 'cover';
-  for (const id of ['cover', 'meter', 'why', 'how', 'proof', 'city']) if (S[id]!.getBoundingClientRect().top < mid) current = id;
-  for (const a of document.querySelectorAll<HTMLAnchorElement>('.chapters a')) a.classList.toggle('on', a.dataset.ch === current);
-  $('progress').style.width = `${(100 * scrollY) / Math.max(1, document.documentElement.scrollHeight - innerHeight)}%`;
+  for (const [id, ch] of RAIL) if (geo[id]!.top < mid) current = ch;
+  if (current !== chapter) {
+    chapter = current;
+    for (const a of railLinks) {
+      a.classList.toggle('on', a.dataset.ch === current);
+      if (a.dataset.ch === current) a.setAttribute('aria-current', 'step');
+      else a.removeAttribute('aria-current');
+    }
+  }
+  document.body.classList.toggle('past', scrollY + viewH * 0.6 > footerTop);
+  const f = Math.round(1000 * Math.min(1, scrollY / docMax)) / 1000;
+  if (f !== progressShown) {
+    progressShown = f;
+    progressBar.style.transform = `scaleX(${f})`;
+  }
 }
 
 // ---- The transformer's floating label ----
@@ -461,8 +597,7 @@ const dtLabel = $('dt');
 const v = new THREE.Vector3();
 function placeLabel(): void {
   v.copy(city.transformer).project(camera);
-  dtLabel.style.left = `${((v.x + 1) / 2) * innerWidth}px`;
-  dtLabel.style.top = `${((1 - v.y) / 2) * innerHeight}px`;
+  dtLabel.style.transform = `translate(${((v.x + 1) / 2) * innerWidth}px, ${((1 - v.y) / 2) * innerHeight}px) translate(-50%, -150%)`;
 }
 
 // ---- Picking ----
@@ -509,7 +644,8 @@ canvas.addEventListener('pointermove', (e) => {
     const st = last?.state[i];
     const what = !last ? 'meter starting up' : st === 2 ? 'unplugged' : mode === 'raw' ? `drawing ${fmtW(last.readings[i]!)}` : st === 1 ? 'left out of this round' : 'in the total · reading masked';
     tip.innerHTML = `<b>${city.labels[i]}</b><br>${what}`;
-    Object.assign(tip.style, { display: 'block', left: `${e.clientX + 14}px`, top: `${e.clientY + 14}px` });
+    tip.style.display = 'block';
+    tip.style.transform = `translate(${e.clientX + 14}px, ${e.clientY + 14}px)`;
   });
 });
 canvas.addEventListener('pointerleave', hideTip);
@@ -847,6 +983,98 @@ for (const b of document.querySelectorAll<HTMLButtonElement>('#quality button'))
     if (b.dataset.q === quality) return;
     store.set('veil-quality', b.dataset.q!);
     location.reload();
+  });
+}
+
+// ---- Try it: the reader changes House 3's reading; its report changes, the masks don't, the total stays exact ----
+{
+  const TRY = 2;
+  const slider = $<HTMLInputElement>('tryReading');
+  const others = city.explainHomes.reduce((a, _, i) => (i === TRY ? a : a + explainer.reading(i)), 0);
+  slider.max = String(Math.max(100, Math.min(3000, Math.floor((9990 - others) / 10) * 10))); // the 4-digit tags hold totals under 10,000
+  slider.value = String(explainer.reading(TRY));
+  $('tryLabel').textContent = `${slider.value} W`;
+  let cool: ReturnType<typeof setTimeout> | undefined;
+  slider.addEventListener('input', () => {
+    explainer.setReading(TRY, Number(slider.value));
+    explainer.hot = TRY;
+    $('tryLabel').textContent = `${slider.value} W`;
+    clearTimeout(cool);
+    cool = setTimeout(() => (explainer.hot = -1), 1600);
+  });
+}
+
+// ---- Measured results: the numbers count up as each card lands, and the cards tilt in the hand ----
+{
+  const fine = matchMedia('(pointer: fine)').matches;
+  const count = (b: HTMLElement): void => {
+    const final = b.textContent!;
+    const m = /^([\d,]+(?:\.\d+)?)(.*)$/.exec(final);
+    if (!m || still) return;
+    const value = Number(m[1]!.replaceAll(',', ''));
+    const decimals = m[1]!.split('.')[1]?.length ?? 0;
+    const commas = m[1]!.includes(',');
+    const start = performance.now();
+    const step = (now: number) => {
+      const t = Math.min(1, (now - start) / 1100);
+      const x = value * (1 - (1 - t) ** 3);
+      b.textContent = t < 1 ? `${commas ? Math.round(x).toLocaleString('en-IN') : x.toFixed(decimals)}${m[2]}` : final;
+      if (t < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  };
+  const seen = new IntersectionObserver(
+    (entries) =>
+      entries.forEach((e) => {
+        if (!e.isIntersecting) return;
+        seen.unobserve(e.target);
+        const b = e.target.querySelector<HTMLElement>('b[data-count]');
+        if (b) count(b);
+      }),
+    { threshold: 0.5 },
+  );
+  for (const card of document.querySelectorAll<HTMLElement>('.specimen')) {
+    seen.observe(card);
+    if (!fine || still) continue;
+    let box: DOMRect | undefined;
+    card.addEventListener('pointerenter', () => {
+      box = card.getBoundingClientRect();
+      card.classList.add('tilting');
+    });
+    card.addEventListener('pointermove', (e) => {
+      if (!box) return;
+      card.style.setProperty('--ry', `${((e.clientX - box.left) / box.width - 0.5) * 12}deg`);
+      card.style.setProperty('--rx', `${-((e.clientY - box.top) / box.height - 0.5) * 10}deg`);
+    });
+    card.addEventListener('pointerleave', () => {
+      box = undefined;
+      card.classList.remove('tilting');
+      card.style.setProperty('--rx', '0deg');
+      card.style.setProperty('--ry', '0deg');
+    });
+  }
+}
+
+// ---- The back cover's folder: one tab per reader, with arrow keys between them ----
+{
+  const tabs = [...document.querySelectorAll<HTMLButtonElement>('#folder [role=tab]')];
+  const choose = (tab: HTMLButtonElement, focusIt: boolean): void => {
+    for (const t of tabs) {
+      const on = t === tab;
+      t.setAttribute('aria-selected', String(on));
+      t.tabIndex = on ? 0 : -1;
+      $(t.getAttribute('aria-controls')!).hidden = !on;
+    }
+    if (focusIt) tab.focus();
+  };
+  tabs.forEach((tab, i) => {
+    tab.addEventListener('click', () => choose(tab, false));
+    tab.addEventListener('keydown', (e) => {
+      const to = e.key === 'ArrowRight' ? i + 1 : e.key === 'ArrowLeft' ? i - 1 : e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : -2;
+      if (to === -2) return;
+      e.preventDefault();
+      choose(tabs[(to + tabs.length) % tabs.length]!, true);
+    });
   });
 }
 
