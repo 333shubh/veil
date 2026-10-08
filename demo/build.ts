@@ -21,7 +21,7 @@ const browserCrypto: Plugin = {
 const common: BuildOptions = { bundle: true, format: 'esm', plugins: [browserCrypto], inject: [here('./shims/buffer.ts')], logLevel: 'warning' };
 
 mkdirSync(here('./dist'), { recursive: true });
-for (const page of ['index.html', 'classic.html', 'favicon.svg', 'og.jpg']) if (existsSync(here(`./${page}`))) copyFileSync(here(`./${page}`), here(`./dist/${page}`));
+for (const page of ['index.html', 'classic.html', 'brand.html', 'tokens.css', 'favicon.svg', 'og.jpg']) if (existsSync(here(`./${page}`))) copyFileSync(here(`./${page}`), here(`./dist/${page}`));
 await build({
   ...common,
   entryPoints: [here('./soak.ts'), here('./shard-thread.ts')],

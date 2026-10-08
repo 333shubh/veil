@@ -1,0 +1,82 @@
+/* Veil design tokens: the printed-paper system. Documented in docs/design.md and shown at /brand. Light theme only. */
+:root {
+  /* ink and ground */
+  --butter: #f7c053;      /* interface ground */
+  --butter-2: #fbd592;    /* sky, page */
+  --brown: #7e5502;       /* interface ink on butter */
+  --brown-2: #a8740f;
+  --paper: #fffaf1;       /* card surface */
+  --paper-2: #f6f1e8;     /* inset surface */
+
+  /* text */
+  --deep: #23386e;        /* headlines */
+  --text: #2b2f45;        /* body */
+  --muted: #62677e;       /* secondary */
+
+  /* print */
+  --ink: #3d5da8;         /* line art, links, kickers */
+  --pale: #d3e0e9;        /* card stock */
+  --rose: #eb9cb4;        /* the table */
+  --sun: #f35a56;
+
+  /* signal */
+  --pink: #e0457e;        /* the stamp: one per view, and focus */
+  --violet: #7d5cc6;      /* masked values */
+  --ok: #4e8a3a;
+  --warn: #b07a10;
+  --fail: #e9524a;
+  --red: #e9524a; --yellow: #f2c14e; --orange: #f07e3e; --green: #6f9e45;
+
+  /* type */
+  --sans: "Plus Jakarta Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  --t-xs: 12px;
+  --t-sm: 14px;
+  --t-md: 17px;
+  --t-lg: 21px;
+  --t-xl: 28px;
+  --t-2xl: clamp(30px, 3.1vw, 50px);
+  --t-hero: clamp(44px, min(7.4vw, 12.5vh), 124px);
+
+  /* space, 4 px base */
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 24px; --s-6: 32px; --s-7: 48px; --s-8: 64px; --s-9: 96px; --s-10: 128px;
+  --gutter: clamp(16px, 6vw, 104px);
+
+  /* shape */
+  --r-paper: 6px;
+  --r-card: 14px;
+  --r-pill: 999px;
+
+  /* elevation: paper resting, paper picked up, a stamped button */
+  --lift: 0 1px 0 rgba(35,56,110,.14), 0 14px 30px -14px rgba(35,56,110,.45), 0 2px 6px -2px rgba(35,56,110,.18);
+  --lift-2: 0 1px 0 rgba(35,56,110,.14), 0 26px 44px -18px rgba(35,56,110,.5), 0 4px 10px -4px rgba(35,56,110,.2);
+  --press: 0 3px 0 var(--pink);
+
+  /* motion: paper in your hands */
+  --d-press: 120ms;
+  --d-hover: 200ms;
+  --d-panel: 320ms;
+  --d-page: 700ms;
+  --e-out: cubic-bezier(.2, .8, .2, 1);
+  --e-move: cubic-bezier(.65, 0, .35, 1);
+  --e-paper: cubic-bezier(.2, 1.35, .4, 1);
+}
+
+/* Lenis smooth scrolling */
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
+.lenis.lenis-stopped { overflow: clip; }
+
+/* shared primitives */
+.pill { font: 700 14px var(--sans); color: var(--paper); background: var(--deep); border: 0; border-radius: var(--r-pill); padding: 11px 19px; cursor: pointer; text-decoration: none;
+  display: inline-flex; align-items: center; gap: 8px; box-shadow: var(--press); transition: transform var(--d-press) var(--e-out), box-shadow var(--d-press) var(--e-out); }
+.pill:hover { transform: translateY(-1px); box-shadow: 0 4px 0 var(--pink); }
+.pill:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--pink); }
+.pill.ghost { background: var(--paper); color: var(--deep); box-shadow: inset 0 0 0 1.5px var(--deep); }
+.pill.ghost:hover { box-shadow: inset 0 0 0 1.5px var(--deep), 0 3px 0 var(--rose); }
+.pill.butter { background: var(--butter); color: var(--brown); box-shadow: 0 3px 0 var(--brown); }
+.pill.butter:hover { box-shadow: 0 4px 0 var(--brown); }
+.kicker { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; font: 700 12.5px var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--ink); }
+.kicker .no { font: 800 12px var(--sans); color: var(--pink); border: 1.5px solid var(--pink); border-radius: 4px; padding: 2px 7px; letter-spacing: .04em; }
+.mark { display: inline-block; width: 1em; height: 1em; flex: none; }
