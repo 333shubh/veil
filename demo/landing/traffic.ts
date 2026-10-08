@@ -155,6 +155,7 @@ export class Traffic {
 export class Kites {
   readonly root = new THREE.Group();
   private readonly kites: { obj: THREE.Mesh; home: THREE.Vector3; phase: number; line: THREE.Line }[] = [];
+  private readonly drift = new THREE.Vector3();
 
   constructor(anchors: THREE.Vector3[]) {
     const random = rng(7);
@@ -186,7 +187,7 @@ export class Kites {
 
   update(time: number): void {
     for (const k of this.kites) {
-      k.obj.position.copy(k.home).add(new THREE.Vector3(Math.sin(time * 0.7 + k.phase) * 0.8, Math.sin(time * 1.1 + k.phase) * 0.5, Math.cos(time * 0.5 + k.phase) * 0.4));
+      k.obj.position.copy(k.home).add(this.drift.set(Math.sin(time * 0.7 + k.phase) * 0.8, Math.sin(time * 1.1 + k.phase) * 0.5, Math.cos(time * 0.5 + k.phase) * 0.4));
       k.obj.rotation.set(0.2 * Math.sin(time + k.phase), 0, 0.35 * Math.sin(time * 0.9 + k.phase));
       const p = k.line.geometry.attributes.position as THREE.BufferAttribute;
       p.setXYZ(1, k.obj.position.x, k.obj.position.y - 0.4, k.obj.position.z);
